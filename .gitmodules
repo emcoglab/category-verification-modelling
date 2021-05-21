@@ -1,0 +1,3 @@
+[submodule "framework/cognitive_model"]
+	path = framework/cognitive_model
+	url = git@github.com:emcoglab/cognitive-model.git
