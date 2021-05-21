@@ -1,3 +1,6 @@
 [submodule "framework/cognitive_model"]
 	path = framework/cognitive_model
 	url = git@github.com:emcoglab/cognitive-model.git
+[submodule "framework/data"]
+	path = framework/data
+	url = git@github.com:emcoglab/category-verification-data.git
