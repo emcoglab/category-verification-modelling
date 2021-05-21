@@ -1,0 +1,196 @@
+# All of these will be submitted with CCA-attenuation at 0, .5 and 1.
+# Note to self: for thresholds we want ling ling <= sm ling <= sm sm <= ling sm.
+#   So I'm moving all these to the bottom of the spec
+- Bailout: 20000
+  Run for ticks: 1000
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.99
+  (Linguistic) Edge decay SD: 15.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0  # This is getting manipulated externally, see comment at top of file
+  # Thresholds
+  (Linguistic) Firing threshold: 0.4
+  (Linguistic) Accessible set threshold: 0.4
+  (Sensorimotor) Accessible set threshold: 0.4
+  Buffer threshold: 0.4
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
+- Bailout: 20000
+  Run for ticks: 1000
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.99
+  (Linguistic) Edge decay SD: 15.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0  # This is getting manipulated externally, see comment at top of file
+  # Thresholds
+  (Linguistic) Firing threshold: 0.35
+  (Linguistic) Accessible set threshold: 0.35
+  (Sensorimotor) Accessible set threshold: 0.35
+  Buffer threshold: 0.35
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
+- Bailout: 20000
+  Run for ticks: 1000
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.99
+  (Linguistic) Edge decay SD: 15.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0  # This is getting manipulated externally, see comment at top of file
+  # Thresholds
+  (Linguistic) Firing threshold: 0.35
+  (Linguistic) Accessible set threshold: 0.35
+  (Sensorimotor) Accessible set threshold: 0.4
+  Buffer threshold: 0.4
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
+# This turned out to be an interesting one
+- Bailout: 20000
+  Run for ticks: 1000
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.95
+  (Linguistic) Edge decay SD: 15.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0  # This is getting manipulated externally, see comment at top of file
+  # Thresholds
+  (Linguistic) Firing threshold: 0.35
+  (Linguistic) Accessible set threshold: 0.35
+  (Sensorimotor) Accessible set threshold: 0.4
+  Buffer threshold: 0.4
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
+- Bailout: 20000
+  Run for ticks: 1000
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.98
+  (Linguistic) Edge decay SD: 14.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0  # This is getting manipulated externally, see comment at top of file
+  # Thresholds
+  (Linguistic) Firing threshold: 0.35
+  (Linguistic) Accessible set threshold: 0.35
+  (Sensorimotor) Accessible set threshold: 0.4
+  Buffer threshold: 0.4
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
+- Bailout: 20000
+  Run for ticks: 1000
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.99
+  (Linguistic) Edge decay SD: 15.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0  # This is getting manipulated externally, see comment at top of file
+  # Thresholds
+  (Linguistic) Firing threshold: 0.35
+  (Linguistic) Accessible set threshold: 0.35
+  (Sensorimotor) Accessible set threshold: 0.35
+  Buffer threshold: 0.4
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
