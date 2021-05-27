@@ -16,6 +16,7 @@ caiwingfield.net
 ---------------------------
 """
 
+from enum import Enum
 from sys import argv
 from argparse import ArgumentParser
 from pathlib import Path
@@ -24,46 +25,57 @@ from typing import Optional
 from numpy import nan
 from pandas import DataFrame
 
-from framework.category_production.category_production import CategoryProduction
-from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
-from framework.cognitive_model.ldm.utils.maths import DistanceType
-from framework.cognitive_model.basic_types import ActivationValue, Component, Length
-from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
 from framework.cognitive_model.components import FULL_ACTIVATION
-from framework.cognitive_model.events import ItemActivatedEvent, ItemEnteredBufferEvent
+from framework.data.category_verification import CategoryVerificationOriginal, CategoryVerificationReplication
+from framework.cognitive_model.ldm.utils.maths import DistanceType
+from framework.cognitive_model.basic_types import ActivationValue, Length
+from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
 from framework.cognitive_model.linguistic_components import LinguisticComponent
 from framework.cognitive_model.sensorimotor_components import SensorimotorComponent
 from framework.cognitive_model.attenuation_statistic import AttenuationStatistic
-from framework.cognitive_model.utils.file import comment_line_from_str
 from framework.cognitive_model.utils.logging import logger
-from framework.cognitive_model.version import VERSION
 from framework.cognitive_model.preferences.preferences import Preferences
-from framework.evaluation.column_names import COMPONENT, ACTIVATION, TICK_ON_WHICH_ACTIVATED, \
-    ITEM_ENTERED_ACCESSIBLE_SET, ITEM_ENTERED_BUFFER, ITEM_ID, CORRECT_RESPONSE, RESPONSE
-from framework.cli.job import InteractiveCombinedJobSpec, LinguisticPropagationJobSpec, SensorimotorPropagationJobSpec
+from framework.cli.job import CategoryVerificationJobSpec, LinguisticPropagationJobSpec, SensorimotorPropagationJobSpec
 
 # arg choices: filter_events
 ARG_ACCESSIBLE_SET = "accessible_set"
 ARG_BUFFER         = "buffer"
 
+# arg choices: dataset
+ARG_DATASET_TRAIN = "train"
+ARG_DATASET_TEST  = "test"
 
-def main(job_spec: InteractiveCombinedJobSpec, use_prepruned: bool, filter_events: Optional[str]):
 
-    response_dir: Path = Path(Preferences.output_dir,
-                              "Category verification",
-                              job_spec.output_location_relative())
+class Decision(Enum):
+    yes = 1
+    no = 0
+    undecided = -1
+
+
+def check_for_decision(job_spec, model, object_label):
+    # TODO: which component to track object activation in?
+    object_activation = model.linguistic_component.propagator.activation_of_item_with_label(object_label)
+    if object_activation < job_spec.decision_threshold_no:
+        return Decision.no
+    if object_activation >= job_spec.decision_threshold_yes:
+        return Decision.yes
+    return Decision.undecided
+
+
+def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_events: Optional[str], dataset: str):
+
+    # Validate spec
+    assert job_spec.soa_ticks <= job_spec.run_for_ticks
+
+    # Set up output directories
+    response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
     if filter_events is not None:
-        response_dir = Path(
-            response_dir.parent,
-            response_dir.name + f" only {filter_events}"
-        )
-
+        response_dir = Path(response_dir.parent, response_dir.name + f" only {filter_events}")
     if not response_dir.is_dir():
         logger.warning(f"{response_dir} directory does not exist; making it.")
         response_dir.mkdir(parents=True)
 
-    job_spec.save(in_location=response_dir)
-
+    # Set up model
     model = InteractiveCombinedCognitiveModel(
         sensorimotor_component=(job_spec.sensorimotor_spec.to_component_prepruned(SensorimotorComponent)
                                 if use_prepruned
@@ -78,8 +90,57 @@ def main(job_spec: InteractiveCombinedJobSpec, use_prepruned: bool, filter_event
         buffer_capacity_linguistic_items=job_spec.buffer_capacity_linguistic_items,
         buffer_capacity_sensorimotor_items=job_spec.buffer_capacity_sensorimotor_items,
     )
-
+    job_spec.save(in_location=response_dir)
     model.mapping.save_to(directory=response_dir)
+
+    # Select correct dataset
+    # TODO: not sure we're actually using the differences here, if the stimuli are the same
+    if dataset == ARG_DATASET_TRAIN:
+        cv_data = CategoryVerificationOriginal()
+    elif dataset == ARG_DATASET_TEST:
+        cv_data = CategoryVerificationReplication()
+    else:
+        raise ValueError()
+
+    object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
+    for category_label, object_label in cv_data.category_object_pairs():
+        model.reset()
+
+        # (1) Activate the initial category label
+        # TODO: are any multi-word?
+        model.linguistic_component.propagator.activate_item_with_label(category_label, activation=FULL_ACTIVATION)
+
+        # Start the clock
+        for _ in range(0, job_spec.soa_ticks):
+            logger.info(f"Clock = {model.clock}")
+
+            model.tick()
+
+        # Once we reach the SOA time, begin checking for a decision
+        for _ in range(job_spec.soa_ticks, job_spec.run_for_ticks):
+
+            # Apply incremental activation during the immediate post-SOA period
+            if model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
+                # TODO: attenuate this by prevalence
+                model.sensorimotor_component.propagator.activate_item_with_label(object_label, activation=object_activation_increment)
+                model.linguistic_component.propagator.activate_item_with_label(object_label, activation=object_activation_increment)
+
+            # Advance the model
+            model.tick()
+
+            # Once we've reached point (3), we start checking for a decision
+            if model.clock < job_spec.soa_ticks:
+                continue
+
+            # TODO !!!!!!!!!!
+            #  The time we'll save by stopping when we have a decision, we'll definitely waste by having to rerun the
+            #  whole thing for a new pair of thresholds.  We should just record the activation and do the deciding.
+            decision = check_for_decision(job_spec, model, object_label)
+            if decision == Decision.undecided:
+                continue
+
+
+
 
 
 if __name__ == '__main__':
@@ -126,13 +187,22 @@ if __name__ == '__main__':
 
     parser.add_argument("--filter_events", type=str, choices=[ARG_BUFFER, ARG_ACCESSIBLE_SET], default=None)
 
+    parser.add_argument("--soa", type=int, required=True)
+    parser.add_argument("--object_activation", type=ActivationValue, required=True)
+    parser.add_argument("--object_activation_duration", type=int, required=True)
+    parser.add_argument("--yes_threshold", type=ActivationValue, required=True)
+    parser.add_argument("--no_threshold", type=ActivationValue, required=True)
+
+    # Additional args
+    parser.add_argument("--dataset", type=str, choices=[ARG_DATASET_TRAIN, ARG_DATASET_TEST], required=True)
+
     args = parser.parse_args()
 
     if not args.sensorimotor_use_breng_translation:
         logger.warning("BrEng translation will always be used in the interactive model.")
 
     main(
-        job_spec=InteractiveCombinedJobSpec(
+        job_spec=CategoryVerificationJobSpec(
             linguistic_spec=LinguisticPropagationJobSpec(
                 accessible_set_threshold=args.linguistic_accessible_set_threshold,
                 accessible_set_capacity=args.linguistic_accessible_set_capacity,
@@ -175,9 +245,15 @@ if __name__ == '__main__':
             smc_to_lc_threshold=args.smc_to_lc_threshold,
             run_for_ticks=args.run_for_ticks,
             bailout=args.bailout,
+            soa_ticks=args.soa,
+            object_activation=args.object_activation,
+            incremental_activation_duration=args.object_activation_duration,
+            decision_threshold_yes=args.yes_threshold,
+            decision_threshold_no=args.no_threshold,
         ),
         use_prepruned=args.sensorimotor_use_prepruned,
         filter_events=args.filter_events,
+        dataset=args.dataset,
     )
 
     logger.info("Done!")

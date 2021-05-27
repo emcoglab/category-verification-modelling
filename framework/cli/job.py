@@ -730,6 +730,80 @@ class InteractiveCombinedJobSpec(CombinedJobSpec):
             bailout=int(dictionary["Bailout"]) if "Bailout" in dictionary else None,
         )
 
+
+@dataclass
+class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
+    soa_ticks: int
+    object_activation: ActivationValue
+    incremental_activation_duration: int
+    decision_threshold_yes: ActivationValue
+    decision_threshold_no: ActivationValue
+
+    def output_location_relative(self) -> Path:
+        super_path = super().output_location_relative()
+        return Path(
+            super_path,
+            f"soa {self.soa_ticks}"
+            f" obj_a {self.object_activation}"
+            f" inc_dur {self.incremental_activation_duration}"
+            f" decision {self.decision_threshold_no} {self.decision_threshold_yes}"
+        )
+
+    @property
+    def shorthand(self) -> str:
+        return (
+            super().shorthand
+            + f"soa{self.soa_ticks}"
+            + f"oa{self.object_activation}"
+            + f"dur{self.incremental_activation_duration}"
+            + f"d{self.decision_threshold_no}-{self.decision_threshold_yes}"
+        )
+
+    @property
+    def cli_args(self) -> List[str]:
+        args = super().cli_args + [
+            f"--soa {self.soa_ticks}",
+            f"--object_activation {self.object_activation}",
+            f"--object_activation_duration {self.incremental_activation_duration}",
+            f"--yes_threshold {self.decision_threshold_yes}",
+            f"--no_threshold {self.decision_threshold_no}",
+        ]
+        return args
+
+    def _to_dict(self) -> _SerialisableDict:
+        d = {
+            **super()._to_dict(),
+            "SOA": str(self.soa_ticks),
+            "Object activation": str(self.object_activation),
+            "Incremental activation duration": str(self.incremental_activation_duration),
+            "Decision threshold, yes": str(self.decision_threshold_yes),
+            "Decision threshold, no": str(self.decision_threshold_no),
+        }
+        return d
+
+    @classmethod
+    def _from_dict(cls, dictionary: _SerialisableDict) -> CategoryVerificationJobSpec:
+        super_spec: InteractiveCombinedJobSpec = InteractiveCombinedJobSpec._from_dict(dictionary)
+        return cls(
+            linguistic_spec=super_spec.linguistic_spec,
+            sensorimotor_spec=super_spec.sensorimotor_spec,
+            lc_to_smc_delay=super_spec.lc_to_smc_delay,
+            smc_to_lc_delay=super_spec.smc_to_lc_delay,
+            lc_to_smc_threshold=super_spec.lc_to_smc_threshold,
+            smc_to_lc_threshold=super_spec.smc_to_lc_threshold,
+            cross_component_attenuation=super_spec.cross_component_attenuation,
+            buffer_threshold=super_spec.buffer_threshold,
+            buffer_capacity_linguistic_items=super_spec.buffer_capacity_linguistic_items,
+            buffer_capacity_sensorimotor_items=super_spec.buffer_capacity_sensorimotor_items,
+            run_for_ticks=super_spec.run_for_ticks,
+            bailout=super_spec.bailout,
+            soa_ticks=int(dictionary["SOA"]),
+            object_activation=ActivationValue(dictionary["Object activation"]),
+            incremental_activation_duration=int(dictionary["Incremental activation duration"]),
+            decision_threshold_yes=ActivationValue(dictionary["Decision threshold, yes"]),
+            decision_threshold_no=ActivationValue(dictionary["Decision threshold, no"]),
+        )
+
 # endregion
 
 
@@ -838,6 +912,12 @@ class LinguisticPropagationJob(PropagationJob, ABC):
 class InteractiveCombinedJob(PropagationJob, ABC):
     def __init__(self, *args, **kwargs):
         self.spec: InteractiveCombinedJobSpec
+        super().__init__(*args, **kwargs)
+
+
+class CategoryVerificationJob(InteractiveCombinedJob, ABC):
+    def __init__(self, *args, **kwargs):
+        self.spec: CategoryVerificationJobSpec
         super().__init__(*args, **kwargs)
 
 # endregion

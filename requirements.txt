@@ -1,2 +1,4 @@
 -r framework/cognitive_model/requirements.txt
 -r framework/data/requirements.txt
+numpy
+pandas

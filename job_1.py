@@ -1,14 +1,10 @@
-from copy import deepcopy
 from pathlib import Path
 from typing import Dict
 
-from framework.cli.job import InteractiveCombinedJob, InteractiveCombinedJobSpec
-
-logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
-logger_dateformat = "%Y-%m-%d %H:%M:%S"
+from framework.cli.job import CategoryVerificationJob, CategoryVerificationJobSpec
 
 
-class Job_1(InteractiveCombinedJob):
+class Job_1(CategoryVerificationJob):
 
     # max_sphere_radius (i.e. pruning distance) -> RAM/G
     def SM_RAM(self, distance: float) -> int:
@@ -44,7 +40,7 @@ class Job_1(InteractiveCombinedJob):
         }
     }
 
-    def __init__(self, spec: InteractiveCombinedJobSpec):
+    def __init__(self, spec: CategoryVerificationJobSpec):
         super().__init__(
             script_number="1",
             script_name="1_modelling.py",
@@ -52,7 +48,7 @@ class Job_1(InteractiveCombinedJob):
 
     @property
     def _ram_requirement_g(self):
-        assert isinstance(self.spec, InteractiveCombinedJobSpec)
+        assert isinstance(self.spec, CategoryVerificationJobSpec)
         return self.SM_RAM(self.spec.sensorimotor_spec.max_radius) \
                + self.LING_RAM[self.spec.linguistic_spec.model_name][self.spec.linguistic_spec.n_words]
 
@@ -60,12 +56,12 @@ class Job_1(InteractiveCombinedJob):
 if __name__ == '__main__':
 
     jobs = []
-    s: InteractiveCombinedJobSpec
-    for s in InteractiveCombinedJobSpec.load_multiple(
+    s: CategoryVerificationJobSpec
+    for s in CategoryVerificationJobSpec.load_multiple(
             Path(Path(__file__).parent, "job_specifications/2021-05-21 good example model.yaml")):
         jobs.append(Job_1(s))
 
     for job in jobs:
-        job.run_locally(extra_arguments=["--filter_events accessible_set"])
+        job.run_locally(extra_arguments=["--filter_events accessible_set", "--dataset train"])
 
     print(f"Submitted {len(jobs)} jobs.")
