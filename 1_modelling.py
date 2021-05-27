@@ -81,10 +81,12 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
     # Stimuli are the same for both datasets so it doesn't matter which we use here
     cv_data = CategoryVerificationOriginal()
 
-    output_data = []
+    activaton_tracking_data = []
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
     for category_label, object_label in cv_data.category_object_pairs():
+
+        activation_tracking_path = Path(response_dir, f"{category_label}-{object_label}.csv")
 
         model.reset()
 
@@ -118,7 +120,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             model.tick()
 
             # Record the relevant activations
-            output_data.append((
+            activaton_tracking_data.append((
                 model.clock,
                 model.linguistic_component.propagator.activation_of_item_with_label(category_label),
                 model.sensorimotor_component.propagator.activation_of_item_with_label(object_label),
@@ -126,7 +128,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
                 model.sensorimotor_component.propagator.activation_of_item_with_label(object_label),
             ))
 
-        output_data = DataFrame.from_records(output_data, columns=[
+        activaton_tracking_data = DataFrame.from_records(activaton_tracking_data, columns=[
             CLOCK,
             CATEGORY_ACTIVATION_LINGUISTIC,
             CATEGORY_ACTIVATION_SENSORIMOTOR,
@@ -134,9 +136,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             OBJECT_ACTIVATION_SENSORIMOTOR,
         ])
 
-        output_location = Path(...)
-        with output_location.open("w") as results_file:
-            output_data.to_csv(results_file, index=False)
+        with activation_tracking_path.open("w") as file:
+            activaton_tracking_data.to_csv(file, index=False)
 
 
 
