@@ -24,6 +24,9 @@ from typing import Optional
 from pandas import DataFrame
 
 from framework.cognitive_model.components import FULL_ACTIVATION
+from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNormsError
+from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
+from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
 from framework.data.category_verification import CategoryVerificationOriginal
 from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.basic_types import ActivationValue, Length
@@ -38,10 +41,10 @@ from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUIS
     OBJECT_ACTIVATION_LINGUISTIC, OBJECT_ACTIVATION_SENSORIMOTOR
 
 # arg choices: filter_events
-ARG_ACCESSIBLE_SET = "accessible_set"
-ARG_BUFFER         = "buffer"
+_ARG_ACCESSIBLE_SET = "accessible_set"
+_ARG_BUFFER         = "buffer"
 
-attenuation_statistic = AttenuationStatistic.Prevalence
+_sn = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
 
 
 def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_events: Optional[str]):
@@ -82,7 +85,16 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
     for category_label, object_label in cv_data.category_object_pairs():
+
         model.reset()
+
+        object_prevalence: float
+        try:
+            object_prevalence = scale_prevalence_01(prevalence_from_fraction_known(_sn.fraction_known(object_label)))
+        except WordNotInNormsError:
+            # In case the word isn't in the norms, make that known, but fall back to full prevalence
+            logger.warning(f"Could not look up prevalence as {object_label} is not in the sensorimotor norms")
+            object_prevalence = 1.0
 
         # (1) Activate the initial category label
         # TODO: are any multi-word?
@@ -94,9 +106,13 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
 
             # Apply incremental activation during the immediate post-SOA period
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
-                # TODO: attenuate this by prevalence
-                model.sensorimotor_component.propagator.activate_item_with_label(object_label, activation=object_activation_increment)
-                model.linguistic_component.propagator.activate_item_with_label(object_label, activation=object_activation_increment)
+                model.sensorimotor_component.propagator.activate_item_with_label(
+                    object_label,
+                    activation=object_activation_increment)
+                model.linguistic_component.propagator.activate_item_with_label(
+                    object_label,
+                    # Attenuate linguistic activation by object label prevalence
+                    activation=object_activation_increment * object_prevalence)
 
             # Advance the model
             model.tick()
@@ -167,7 +183,7 @@ if __name__ == '__main__':
     parser.add_argument("--bailout", required=False, default=0, type=int)
     parser.add_argument("--run_for_ticks", required=True, type=int)
 
-    parser.add_argument("--filter_events", type=str, choices=[ARG_BUFFER, ARG_ACCESSIBLE_SET], default=None)
+    parser.add_argument("--filter_events", type=str, choices=[_ARG_BUFFER, _ARG_ACCESSIBLE_SET], default=None)
 
     parser.add_argument("--soa", type=int, required=True)
     parser.add_argument("--object_activation", type=ActivationValue, required=True)
