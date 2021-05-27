@@ -16,17 +16,15 @@ caiwingfield.net
 ---------------------------
 """
 
-from enum import Enum
 from sys import argv
 from argparse import ArgumentParser
 from pathlib import Path
 from typing import Optional
 
-from numpy import nan
 from pandas import DataFrame
 
 from framework.cognitive_model.components import FULL_ACTIVATION
-from framework.data.category_verification import CategoryVerificationOriginal, CategoryVerificationReplication
+from framework.data.category_verification import CategoryVerificationOriginal
 from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.basic_types import ActivationValue, Length
 from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
@@ -36,33 +34,17 @@ from framework.cognitive_model.attenuation_statistic import AttenuationStatistic
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.preferences.preferences import Preferences
 from framework.cli.job import CategoryVerificationJobSpec, LinguisticPropagationJobSpec, SensorimotorPropagationJobSpec
+from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC, CATEGORY_ACTIVATION_SENSORIMOTOR, \
+    OBJECT_ACTIVATION_LINGUISTIC, OBJECT_ACTIVATION_SENSORIMOTOR
 
 # arg choices: filter_events
 ARG_ACCESSIBLE_SET = "accessible_set"
 ARG_BUFFER         = "buffer"
 
-# arg choices: dataset
-ARG_DATASET_TRAIN = "train"
-ARG_DATASET_TEST  = "test"
+attenuation_statistic = AttenuationStatistic.Prevalence
 
 
-class Decision(Enum):
-    yes = 1
-    no = 0
-    undecided = -1
-
-
-def check_for_decision(job_spec, model, object_label):
-    # TODO: which component to track object activation in?
-    object_activation = model.linguistic_component.propagator.activation_of_item_with_label(object_label)
-    if object_activation < job_spec.decision_threshold_no:
-        return Decision.no
-    if object_activation >= job_spec.decision_threshold_yes:
-        return Decision.yes
-    return Decision.undecided
-
-
-def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_events: Optional[str], dataset: str):
+def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_events: Optional[str]):
 
     # Validate spec
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
@@ -93,14 +75,10 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
     job_spec.save(in_location=response_dir)
     model.mapping.save_to(directory=response_dir)
 
-    # Select correct dataset
-    # TODO: not sure we're actually using the differences here, if the stimuli are the same
-    if dataset == ARG_DATASET_TRAIN:
-        cv_data = CategoryVerificationOriginal()
-    elif dataset == ARG_DATASET_TEST:
-        cv_data = CategoryVerificationReplication()
-    else:
-        raise ValueError()
+    # Stimuli are the same for both datasets so it doesn't matter which we use here
+    cv_data = CategoryVerificationOriginal()
+
+    output_data = []
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
     for category_label, object_label in cv_data.category_object_pairs():
@@ -111,16 +89,11 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
         model.linguistic_component.propagator.activate_item_with_label(category_label, activation=FULL_ACTIVATION)
 
         # Start the clock
-        for _ in range(0, job_spec.soa_ticks):
+        for _ in range(0, job_spec.run_for_ticks):
             logger.info(f"Clock = {model.clock}")
 
-            model.tick()
-
-        # Once we reach the SOA time, begin checking for a decision
-        for _ in range(job_spec.soa_ticks, job_spec.run_for_ticks):
-
             # Apply incremental activation during the immediate post-SOA period
-            if model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
+            if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
                 # TODO: attenuate this by prevalence
                 model.sensorimotor_component.propagator.activate_item_with_label(object_label, activation=object_activation_increment)
                 model.linguistic_component.propagator.activate_item_with_label(object_label, activation=object_activation_increment)
@@ -128,17 +101,26 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             # Advance the model
             model.tick()
 
-            # Once we've reached point (3), we start checking for a decision
-            if model.clock < job_spec.soa_ticks:
-                continue
+            # Record the relevant activations
+            output_data.append((
+                model.clock,
+                model.linguistic_component.propagator.activation_of_item_with_label(category_label),
+                model.sensorimotor_component.propagator.activation_of_item_with_label(object_label),
+                model.linguistic_component.propagator.activation_of_item_with_label(category_label),
+                model.sensorimotor_component.propagator.activation_of_item_with_label(object_label),
+            ))
 
-            # TODO !!!!!!!!!!
-            #  The time we'll save by stopping when we have a decision, we'll definitely waste by having to rerun the
-            #  whole thing for a new pair of thresholds.  We should just record the activation and do the deciding.
-            decision = check_for_decision(job_spec, model, object_label)
-            if decision == Decision.undecided:
-                continue
+        output_data = DataFrame.from_records(output_data, columns=[
+            CLOCK,
+            CATEGORY_ACTIVATION_LINGUISTIC,
+            CATEGORY_ACTIVATION_SENSORIMOTOR,
+            OBJECT_ACTIVATION_LINGUISTIC,
+            OBJECT_ACTIVATION_SENSORIMOTOR,
+        ])
 
+        output_location = Path(...)
+        with output_location.open("w") as results_file:
+            output_data.to_csv(results_file, index=False)
 
 
 
@@ -190,11 +172,6 @@ if __name__ == '__main__':
     parser.add_argument("--soa", type=int, required=True)
     parser.add_argument("--object_activation", type=ActivationValue, required=True)
     parser.add_argument("--object_activation_duration", type=int, required=True)
-    parser.add_argument("--yes_threshold", type=ActivationValue, required=True)
-    parser.add_argument("--no_threshold", type=ActivationValue, required=True)
-
-    # Additional args
-    parser.add_argument("--dataset", type=str, choices=[ARG_DATASET_TRAIN, ARG_DATASET_TEST], required=True)
 
     args = parser.parse_args()
 
@@ -248,12 +225,9 @@ if __name__ == '__main__':
             soa_ticks=args.soa,
             object_activation=args.object_activation,
             incremental_activation_duration=args.object_activation_duration,
-            decision_threshold_yes=args.yes_threshold,
-            decision_threshold_no=args.no_threshold,
         ),
         use_prepruned=args.sensorimotor_use_prepruned,
         filter_events=args.filter_events,
-        dataset=args.dataset,
     )
 
     logger.info("Done!")

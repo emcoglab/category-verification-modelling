@@ -736,8 +736,6 @@ class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
     soa_ticks: int
     object_activation: ActivationValue
     incremental_activation_duration: int
-    decision_threshold_yes: ActivationValue
-    decision_threshold_no: ActivationValue
 
     def output_location_relative(self) -> Path:
         super_path = super().output_location_relative()
@@ -746,7 +744,6 @@ class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
             f"soa {self.soa_ticks}"
             f" obj_a {self.object_activation}"
             f" inc_dur {self.incremental_activation_duration}"
-            f" decision {self.decision_threshold_no} {self.decision_threshold_yes}"
         )
 
     @property
@@ -756,7 +753,6 @@ class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
             + f"soa{self.soa_ticks}"
             + f"oa{self.object_activation}"
             + f"dur{self.incremental_activation_duration}"
-            + f"d{self.decision_threshold_no}-{self.decision_threshold_yes}"
         )
 
     @property
@@ -765,8 +761,6 @@ class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
             f"--soa {self.soa_ticks}",
             f"--object_activation {self.object_activation}",
             f"--object_activation_duration {self.incremental_activation_duration}",
-            f"--yes_threshold {self.decision_threshold_yes}",
-            f"--no_threshold {self.decision_threshold_no}",
         ]
         return args
 
@@ -776,8 +770,6 @@ class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
             "SOA": str(self.soa_ticks),
             "Object activation": str(self.object_activation),
             "Incremental activation duration": str(self.incremental_activation_duration),
-            "Decision threshold, yes": str(self.decision_threshold_yes),
-            "Decision threshold, no": str(self.decision_threshold_no),
         }
         return d
 
@@ -800,8 +792,6 @@ class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
             soa_ticks=int(dictionary["SOA"]),
             object_activation=ActivationValue(dictionary["Object activation"]),
             incremental_activation_duration=int(dictionary["Incremental activation duration"]),
-            decision_threshold_yes=ActivationValue(dictionary["Decision threshold, yes"]),
-            decision_threshold_no=ActivationValue(dictionary["Decision threshold, no"]),
         )
 
 # endregion
