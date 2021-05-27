@@ -14,8 +14,8 @@ caiwingfield.net
 ---------------------------
 """
 
-CLOCK                            = "Clock"
-CATEGORY_ACTIVATION_LINGUISTIC   = "Activation of category (linguistic)"
-CATEGORY_ACTIVATION_SENSORIMOTOR = "Activation of category (sensorimotor)"
-OBJECT_ACTIVATION_LINGUISTIC     = "Activation of object (linguistic)"
-OBJECT_ACTIVATION_SENSORIMOTOR   = "Activation of object (sensorimotor)"
+CLOCK                              = "Clock"
+CATEGORY_ACTIVATION_LINGUISTIC_f   = "Activation of category {0} (linguistic)"
+CATEGORY_ACTIVATION_SENSORIMOTOR_f = "Activation of category {0} (sensorimotor)"
+OBJECT_ACTIVATION_LINGUISTIC_f     = "Activation of object {0} (linguistic)"
+OBJECT_ACTIVATION_SENSORIMOTOR_f   = "Activation of object {0} (sensorimotor)"

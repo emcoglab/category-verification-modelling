@@ -19,11 +19,12 @@ caiwingfield.net
 from sys import argv
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 from pandas import DataFrame
 
 from framework.cognitive_model.components import FULL_ACTIVATION
+from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNormsError
 from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
@@ -37,14 +38,18 @@ from framework.cognitive_model.attenuation_statistic import AttenuationStatistic
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.preferences.preferences import Preferences
 from framework.cli.job import CategoryVerificationJobSpec, LinguisticPropagationJobSpec, SensorimotorPropagationJobSpec
-from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC, CATEGORY_ACTIVATION_SENSORIMOTOR, \
-    OBJECT_ACTIVATION_LINGUISTIC, OBJECT_ACTIVATION_SENSORIMOTOR
+from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
+    CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
 
 # arg choices: filter_events
 _ARG_ACCESSIBLE_SET = "accessible_set"
 _ARG_BUFFER         = "buffer"
 
 _sn = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
+
+
+def decompose_multiword(term: str) -> List[str]:
+    return modified_word_tokenize(term)
 
 
 def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_events: Optional[str]):
@@ -81,10 +86,13 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
     # Stimuli are the same for both datasets so it doesn't matter which we use here
     cv_data = CategoryVerificationOriginal()
 
-    activaton_tracking_data = []
+    activation_tracking_data = []
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
     for category_label, object_label in cv_data.category_object_pairs():
+
+        category_multiword_parts = decompose_multiword(category_label)
+        object_multiword_parts = decompose_multiword(object_label)
 
         activation_tracking_path = Path(response_dir, f"{category_label}-{object_label}.csv")
 
@@ -99,8 +107,9 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             object_prevalence = 1.0
 
         # (1) Activate the initial category label
-        # TODO: are any multi-word?
-        model.linguistic_component.propagator.activate_item_with_label(category_label, activation=FULL_ACTIVATION)
+        model.linguistic_component.propagator.activate_items_with_labels(
+            labels=category_multiword_parts,
+            activation=FULL_ACTIVATION / len(category_multiword_parts))
 
         # Start the clock
         for _ in range(0, job_spec.run_for_ticks):
@@ -108,19 +117,40 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
 
             # Apply incremental activation during the immediate post-SOA period
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
+                # Activate sensorimotor item directly
                 model.sensorimotor_component.propagator.activate_item_with_label(
-                    object_label,
+                    label=object_label,
                     activation=object_activation_increment)
-                model.linguistic_component.propagator.activate_item_with_label(
-                    object_label,
+                # Activate linguistic items separately
+                model.linguistic_component.propagator.activate_items_with_labels(
+                    labels=object_multiword_parts,
                     # Attenuate linguistic activation by object label prevalence
-                    activation=object_activation_increment * object_prevalence)
+                    activation=object_activation_increment * object_prevalence / len(object_multiword_parts))
 
             # Advance the model
             model.tick()
 
             # Record the relevant activations
-            activaton_tracking_data.append((
+            # There are a variable number of columns, depending on whether the items contain multiple words or not.
+            # Therefore we record it in a list[dict] and build it into a DataFrame later for saving.
+            activation_tracking_data.append({
+                CLOCK: model.clock,
+                **{
+                    CATEGORY_ACTIVATION_LINGUISTIC_f.format(part)
+                    : model.linguistic_component.propagator.activation_of_item_with_label(part)
+                    for part in category_multiword_parts
+                },
+                CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(category_label)
+                : model.sensorimotor_component.propagator.activation_of_item_with_label(category_label),
+                **{
+                    OBJECT_ACTIVATION_LINGUISTIC_f.format(part)
+                    : model.linguistic_component.propagator.activation_of_item_with_label(part)
+                    for part in object_multiword_parts
+                },
+                OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label)
+                : model.sensorimotor_component.propagator.activation_of_item_with_label(object_label)
+            })
+            activation_tracking_data.append((
                 model.clock,
                 model.linguistic_component.propagator.activation_of_item_with_label(category_label),
                 model.sensorimotor_component.propagator.activation_of_item_with_label(object_label),
@@ -128,18 +158,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
                 model.sensorimotor_component.propagator.activation_of_item_with_label(object_label),
             ))
 
-        activaton_tracking_data = DataFrame.from_records(activaton_tracking_data, columns=[
-            CLOCK,
-            CATEGORY_ACTIVATION_LINGUISTIC,
-            CATEGORY_ACTIVATION_SENSORIMOTOR,
-            OBJECT_ACTIVATION_LINGUISTIC,
-            OBJECT_ACTIVATION_SENSORIMOTOR,
-        ])
-
         with activation_tracking_path.open("w") as file:
-            activaton_tracking_data.to_csv(file, index=False)
-
-
+            DataFrame(activation_tracking_data).to_csv(file, index=False)
 
 
 if __name__ == '__main__':
