@@ -1,6 +1,6 @@
 # Note to self: for thresholds we want ling ling <= sm ling <= sm sm <= ling sm.
 #   So I'm moving all these to the bottom of the spec
-# This is the model that worked well before (but cut off a bit earlier for now)
+# This is the model that worked well before (but cut off a bit earlier for now, and with some new params)
 - Bailout: 20000
   Run for ticks: 300  # Speed this up a bit
   (Sensorimotor) Accessible set capacity: 3000
@@ -33,3 +33,7 @@
   Buffer threshold: 0.4
   Linguistic to sensorimotor threshold: 0.4
   Sensorimotor to linguistic threshold: 0.4
+  # New params
+  SOA: 100  # TODO: set this using a regression on the category production results
+  Object activation: 0.3
+  Incremental activation duration: 30

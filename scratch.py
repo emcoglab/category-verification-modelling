@@ -1,4 +1,4 @@
-from framework.data.category_verification import CategoryVerificationParticipantOriginal
+from framework.data.category_verification_data import CategoryVerificationParticipantOriginal
 
 
 def main():

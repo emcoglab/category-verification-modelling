@@ -36,16 +36,37 @@ from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNor
 from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
-from framework.data.category_verification import CategoryVerificationItemData
+from framework.data.category_verification_data import CategoryVerificationItemData
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
-# arg choices: filter_events
 from framework.utils import decompose_multiword
 
+# arg choices: filter_events
 _ARG_ACCESSIBLE_SET = "accessible_set"
 _ARG_BUFFER         = "buffer"
 
 _sn = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
+
+
+def _get_activation_data(model, category_label, object_label) -> dict:
+    """Gets all the relevant activation data in the form of a dictionary."""
+    return {
+        CLOCK: model.clock,
+        **{
+            CATEGORY_ACTIVATION_LINGUISTIC_f.format(part)
+            : model.linguistic_component.propagator.activation_of_item_with_label(part)
+            for part in decompose_multiword(category_label)
+        },
+        CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(category_label)
+        : model.sensorimotor_component.propagator.activation_of_item_with_label(category_label),
+        **{
+            OBJECT_ACTIVATION_LINGUISTIC_f.format(part)
+            : model.linguistic_component.propagator.activation_of_item_with_label(part)
+            for part in decompose_multiword(object_label)
+        },
+        OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label)
+        : model.sensorimotor_component.propagator.activation_of_item_with_label(object_label)
+    }
 
 
 def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_events: Optional[str]):
@@ -129,30 +150,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             # Record the relevant activations
             # There are a variable number of columns, depending on whether the items contain multiple words or not.
             # Therefore we record it in a list[dict] and build it into a DataFrame later for saving.
-            activation_tracking_data.append({
-                CLOCK: model.clock,
-                **{
-                    CATEGORY_ACTIVATION_LINGUISTIC_f.format(part)
-                    : model.linguistic_component.propagator.activation_of_item_with_label(part)
-                    for part in category_multiword_parts
-                },
-                CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(category_label)
-                : model.sensorimotor_component.propagator.activation_of_item_with_label(category_label),
-                **{
-                    OBJECT_ACTIVATION_LINGUISTIC_f.format(part)
-                    : model.linguistic_component.propagator.activation_of_item_with_label(part)
-                    for part in object_multiword_parts
-                },
-                OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label)
-                : model.sensorimotor_component.propagator.activation_of_item_with_label(object_label)
-            })
-            activation_tracking_data.append((
-                model.clock,
-                model.linguistic_component.propagator.activation_of_item_with_label(category_label),
-                model.sensorimotor_component.propagator.activation_of_item_with_label(object_label),
-                model.linguistic_component.propagator.activation_of_item_with_label(category_label),
-                model.sensorimotor_component.propagator.activation_of_item_with_label(object_label),
-            ))
+            activation_tracking_data.append(_get_activation_data(model, category_label, object_label))
 
         with activation_tracking_path.open("w") as file:
             DataFrame(activation_tracking_data).to_csv(file, index=False)
