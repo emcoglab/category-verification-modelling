@@ -16,40 +16,36 @@ caiwingfield.net
 ---------------------------
 """
 
-from sys import argv
 from argparse import ArgumentParser
 from pathlib import Path
-from typing import Optional, List
+from sys import argv
+from typing import Optional
 
 from pandas import DataFrame
 
-from framework.cognitive_model.components import FULL_ACTIVATION
-from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
-from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNormsError
-from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
-from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
-from framework.data.category_verification import CategoryVerificationOriginal
-from framework.cognitive_model.ldm.utils.maths import DistanceType
+from framework.cli.job import CategoryVerificationJobSpec, LinguisticPropagationJobSpec, SensorimotorPropagationJobSpec
+from framework.cognitive_model.attenuation_statistic import AttenuationStatistic
 from framework.cognitive_model.basic_types import ActivationValue, Length
 from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
+from framework.cognitive_model.components import FULL_ACTIVATION
+from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_components import LinguisticComponent
-from framework.cognitive_model.sensorimotor_components import SensorimotorComponent
-from framework.cognitive_model.attenuation_statistic import AttenuationStatistic
-from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.preferences.preferences import Preferences
-from framework.cli.job import CategoryVerificationJobSpec, LinguisticPropagationJobSpec, SensorimotorPropagationJobSpec
+from framework.cognitive_model.sensorimotor_components import SensorimotorComponent
+from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNormsError
+from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
+from framework.cognitive_model.utils.logging import logger
+from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
+from framework.data.category_verification import CategoryVerificationItemData
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
-
 # arg choices: filter_events
+from framework.utils import decompose_multiword
+
 _ARG_ACCESSIBLE_SET = "accessible_set"
 _ARG_BUFFER         = "buffer"
 
 _sn = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
-
-
-def decompose_multiword(term: str) -> List[str]:
-    return modified_word_tokenize(term)
 
 
 def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_events: Optional[str]):
@@ -84,12 +80,12 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
     model.mapping.save_to(directory=response_dir)
 
     # Stimuli are the same for both datasets so it doesn't matter which we use here
-    cv_data = CategoryVerificationOriginal()
+    cv_item_data = CategoryVerificationItemData()
 
     activation_tracking_data = []
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
-    for category_label, object_label in cv_data.category_object_pairs():
+    for category_label, object_label in cv_item_data.category_object_pairs():
 
         category_multiword_parts = decompose_multiword(category_label)
         object_multiword_parts = decompose_multiword(object_label)
