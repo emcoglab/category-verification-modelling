@@ -42,6 +42,7 @@ from framework.cognitive_model.preferences.preferences import Preferences
 from framework.cognitive_model.sensorimotor_components import SensorimotorComponent
 from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNormsError
 from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
+from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
 from framework.data.category_verification_data import CategoryVerificationItemData
@@ -143,14 +144,22 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             # Apply incremental activation during the immediate post-SOA period
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
                 # Activate sensorimotor item directly
-                model.sensorimotor_component.propagator.activate_item_with_label(
-                    label=object_label,
-                    activation=object_activation_increment)
+                try:
+                    model.sensorimotor_component.propagator.activate_item_with_label(
+                        label=object_label,
+                        activation=object_activation_increment)
+                except ItemNotFoundError as e:
+                    logger.error(f"Missing sensorimotor item: {object_label}")
+                    raise e
                 # Activate linguistic items separately
-                model.linguistic_component.propagator.activate_items_with_labels(
-                    labels=object_multiword_parts,
-                    # Attenuate linguistic activation by object label prevalence
-                    activation=object_activation_increment * object_prevalence / len(object_multiword_parts))
+                try:
+                    model.linguistic_component.propagator.activate_items_with_labels(
+                        labels=object_multiword_parts,
+                        # Attenuate linguistic activation by object label prevalence
+                        activation=object_activation_increment * object_prevalence / len(object_multiword_parts))
+                except ItemNotFoundError as e:
+                    logger.error(f"Missing linguistic items: {object_multiword_parts}")
+                    raise e
 
             # Advance the model
             model.tick()
