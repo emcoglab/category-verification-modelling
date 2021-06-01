@@ -1,3 +1,4 @@
+# All of these will be submitted with CCA-attenuation at 0, .5 and 1.
 # Note to self: for thresholds we want ling ling <= sm ling <= sm sm <= ling sm.
 #   So I'm moving all these to the bottom of the spec
 # This is the model that worked well before (but cut off a bit earlier for now, and with some new params)
@@ -25,7 +26,7 @@
   Buffer capacity (sensorimotor items): 9
   Linguistic to sensorimotor delay: 21
   Sensorimotor to linguistic delay: 56
-  Cross-component attenuation: 1.0
+  Cross-component attenuation: 1.0  # This will be overridden
   # Thresholds
   (Linguistic) Firing threshold: 0.35
   (Linguistic) Accessible set threshold: 0.35
