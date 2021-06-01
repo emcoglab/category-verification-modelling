@@ -34,6 +34,7 @@
   Linguistic to sensorimotor threshold: 0.4
   Sensorimotor to linguistic threshold: 0.4
   # New params
-  SOA: 100  # TODO: set this using a regression on the category production results
-  Object activation: 0.3
-  Incremental activation duration: 30
+  SOA: 59  # Median ttfa for rmr==1 responses produced by model is 332.5.
+           # Median RT for the same items is 2.82s. This gives 118.02 ticks/s, and SOA is 500ms: 59 ticks.
+  Object activation: 0.3  # Based on nothing yet
+  Incremental activation duration: 29  # Based on nothing; half the SOA
