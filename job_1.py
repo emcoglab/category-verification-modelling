@@ -62,6 +62,6 @@ if __name__ == '__main__':
         jobs.append(Job_1(s))
 
     for job in jobs:
-        job.submit(extra_arguments=["--filter_events accessible_set", "--use_prepruned"])
+        job.submit(extra_arguments=["--filter_events accessible_set"])
 
     print(f"Submitted {len(jobs)} jobs.")
