@@ -131,8 +131,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
                 activation=FULL_ACTIVATION / len(category_multiword_parts))
         except ItemNotFoundError as e:
             logger.error(f"Missing sensorimotor item: {object_label}")
-            raise e
-
+            # raise e
+            continue  # TODO: temporarily we don't raise, we just note the problem. Later we can decide what to do.
         # Start the clock
         for _ in range(0, job_spec.run_for_ticks):
             logger.info(f"Clock = {model.clock}")
@@ -146,7 +146,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
                         activation=object_activation_increment)
                 except ItemNotFoundError as e:
                     logger.error(f"Missing sensorimotor item: {object_label}")
-                    raise e
+                    # raise e
+                    pass  # TODO: decide what to do here too
                 # Activate linguistic items separately
                 try:
                     model.linguistic_component.propagator.activate_items_with_labels(
@@ -155,7 +156,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
                         activation=object_activation_increment * object_prevalence / len(object_multiword_parts))
                 except ItemNotFoundError as e:
                     logger.error(f"Missing linguistic items: {object_multiword_parts}")
-                    raise e
+                    # raise e
+                    pass  # TODO: decide what to do here too
 
             # Advance the model
             model.tick()
