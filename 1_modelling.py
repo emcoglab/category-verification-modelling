@@ -125,9 +125,13 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             object_prevalence = 1.0
 
         # (1) Activate the initial category label
-        model.linguistic_component.propagator.activate_items_with_labels(
-            labels=category_multiword_parts,
-            activation=FULL_ACTIVATION / len(category_multiword_parts))
+        try:
+            model.linguistic_component.propagator.activate_items_with_labels(
+                labels=category_multiword_parts,
+                activation=FULL_ACTIVATION / len(category_multiword_parts))
+        except ItemNotFoundError as e:
+            logger.error(f"Missing sensorimotor item: {object_label}")
+            raise e
 
         # Start the clock
         for _ in range(0, job_spec.run_for_ticks):
