@@ -51,18 +51,27 @@ _sn = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng tran
 
 def _get_activation_data(model, category_label, object_label) -> dict:
     """Gets all the relevant activation data in the form of a dictionary."""
+    # TODO: Is this the right way to be going about this?
+    def get_linguistic_activation_safe(w):
+        """Get linguistic activations but return None in case of a missing item."""
+        try:
+            return model.linguistic_component.propagator.activation_of_item_with_label(w)
+        except KeyError:
+            logger.warning(f"Missing linguistic word: {w}")
+            return None
+
     return {
         CLOCK: model.clock,
         **{
             CATEGORY_ACTIVATION_LINGUISTIC_f.format(part)
-            : model.linguistic_component.propagator.activation_of_item_with_label(part)
+            : get_linguistic_activation_safe(part)
             for part in decompose_multiword(category_label)
         },
         CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(category_label)
         : model.sensorimotor_component.propagator.activation_of_item_with_label(category_label),
         **{
             OBJECT_ACTIVATION_LINGUISTIC_f.format(part)
-            : model.linguistic_component.propagator.activation_of_item_with_label(part)
+            : get_linguistic_activation_safe(part)
             for part in decompose_multiword(object_label)
         },
         OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label)
