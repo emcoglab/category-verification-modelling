@@ -32,6 +32,7 @@ from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_components import LinguisticComponent
 from framework.cognitive_model.preferences.preferences import Preferences
 from framework.cognitive_model.sensorimotor_components import SensorimotorComponent
+from framework.cognitive_model.sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng
 from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNormsError
 from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
@@ -49,16 +50,46 @@ _ARG_BUFFER         = "buffer"
 _sn = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
 
 
+def _get_best_sensorimotor_translation(sensorimotor_component: SensorimotorComponent, w: str) -> Optional[str]:
+    """
+    Returns the best available translation, or None of none are good enough.
+    :param: sensorimotor_component
+        The component to check for label availability.
+    :param: w
+        The term to attempt translation for.
+    """
+    if w in sensorimotor_component.available_labels:
+        return w
+    for translation in ameng_to_breng.best_translations_for(w):
+        if translation in sensorimotor_component.available_labels:
+            return translation
+    return None
+
+
 def _get_activation_data(model, category_label, object_label) -> dict:
     """Gets all the relevant activation data in the form of a dictionary."""
     # TODO: Is this the right way to be going about this?
-    def get_linguistic_activation_safe(w):
+    def get_linguistic_activation_safe(w: str):
         """Get linguistic activations but return None in case of a missing item."""
         try:
             return model.linguistic_component.propagator.activation_of_item_with_label(w)
         except KeyError:
             logger.warning(f"Missing linguistic word: {w}")
             return None
+
+    def get_sensorimotor_activation_safe(w: str):
+        """Get sensorimotor activations, trying for translation where necessary, and returning None in case of a missing
+         item."""
+        try:
+            return model.sensorimotor_component.propagator.activation_of_item_with_label(w)
+        except KeyError:
+            logger.warning(f"Missing sensorimotor item: {w}")
+            best_translation = _get_best_sensorimotor_translation(model.sensorimotor_component, w)
+            if best_translation is not None:
+                logger.warning(f" Instead trying translation {...}")
+                return model.sensorimotor_component.propagator.activation_of_item_with_label(best_translation)
+            else:
+                return None
 
     return {
         CLOCK: model.clock,
@@ -68,14 +99,14 @@ def _get_activation_data(model, category_label, object_label) -> dict:
             for part in decompose_multiword(category_label)
         },
         CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(category_label)
-        : model.sensorimotor_component.propagator.activation_of_item_with_label(category_label),
+        : get_sensorimotor_activation_safe(category_label),
         **{
             OBJECT_ACTIVATION_LINGUISTIC_f.format(part)
             : get_linguistic_activation_safe(part)
             for part in decompose_multiword(object_label)
         },
         OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label)
-        : model.sensorimotor_component.propagator.activation_of_item_with_label(object_label)
+        : get_sensorimotor_activation_safe(object_label)
     }
 
 
@@ -116,6 +147,20 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
     activation_tracking_data = []
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
+
+    def activate_sensorimotor_item(label, activation):
+        """Handles activation of sensorimotor item with translation if necessary."""
+        if label in model.sensorimotor_component.available_labels:
+            model.sensorimotor_component.propagator.activate_item_with_label(label, activation)
+        else:
+            logger.warning(f"Missing sensorimotor item: {label}")
+            translation = _get_best_sensorimotor_translation(model.sensorimotor_component, label)
+            if translation is not None:
+                logger.warning(f" Attempting with translation: {translation}")
+                model.sensorimotor_component.propagator.activate_item_with_label(translation, activation)
+            else:
+                logger.error(f" No translations available")
+
     for category_label, object_label in cv_item_data.category_object_pairs():
 
         category_multiword_parts = decompose_multiword(category_label)
@@ -139,7 +184,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
                 labels=category_multiword_parts,
                 activation=FULL_ACTIVATION / len(category_multiword_parts))
         except ItemNotFoundError as e:
-            logger.error(f"Missing sensorimotor item: {object_label}")
+            logger.error(f"Missing linguistic item: {object_label}")
             # raise e
             continue  # TODO: temporarily we don't raise, we just note the problem. Later we can decide what to do.
         # Start the clock
@@ -148,9 +193,10 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
 
             # Apply incremental activation during the immediate post-SOA period
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
+
                 # Activate sensorimotor item directly
                 try:
-                    model.sensorimotor_component.propagator.activate_item_with_label(
+                    activate_sensorimotor_item(
                         label=object_label,
                         activation=object_activation_increment)
                 except ItemNotFoundError as e:
