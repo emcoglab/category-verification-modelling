@@ -124,7 +124,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
 
     # Set up output directories
-    response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
+    response_dir: Path = Path(Preferences.output_dir, "Category verification TEST", job_spec.output_location_relative())
     if filter_events is not None:
         response_dir = Path(response_dir.parent, response_dir.name + f" only {filter_events}")
     if not response_dir.is_dir():
@@ -152,8 +152,6 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
     # Stimuli are the same for both datasets so it doesn't matter which we use here
     cv_item_data = CategoryVerificationItemData()
 
-    activation_tracking_data = []
-
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
 
     def activate_sensorimotor_item(label, activation):
@@ -171,12 +169,12 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
 
     for category_label, object_label in cv_item_data.category_object_pairs():
 
+        activation_tracking_path = Path(response_dir, f"{category_label}-{object_label}.csv")
+        activation_tracking_data = []
+        model.reset()
+
         category_multiword_parts = decompose_multiword(category_label)
         object_multiword_parts = decompose_multiword(object_label)
-
-        activation_tracking_path = Path(response_dir, f"{category_label}-{object_label}.csv")
-
-        model.reset()
 
         object_prevalence: float
         try:
@@ -192,13 +190,11 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
                 labels=category_multiword_parts,
                 activation=FULL_ACTIVATION / len(category_multiword_parts))
         except ItemNotFoundError as e:
-            logger.error(f"Missing linguistic item: {object_label}")
+            logger.error(f"Missing linguistic item: {category_label}")
             # raise e
             continue  # TODO: temporarily we don't raise, we just note the problem. Later we can decide what to do.
         # Start the clock
         for _ in range(0, job_spec.run_for_ticks):
-            logger.info(f"Clock = {model.clock}")
-
             # Apply incremental activation during the immediate post-SOA period
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
 
@@ -224,6 +220,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
 
             # Advance the model
             model.tick()
+            logger.info(f"Clock = {model.clock}")
 
             # Record the relevant activations
             # There are a variable number of columns, depending on whether the items contain multiple words or not.
