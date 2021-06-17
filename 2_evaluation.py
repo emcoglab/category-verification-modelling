@@ -22,8 +22,6 @@ from logging import getLogger, basicConfig, INFO
 from pathlib import Path
 from typing import Optional
 
-from matplotlib import pyplot
-from numpy import savetxt, array
 from pandas import DataFrame
 
 from framework.cli.job import InteractiveCombinedJobSpec
