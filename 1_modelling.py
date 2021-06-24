@@ -86,7 +86,7 @@ def _get_activation_data(model, category_label, object_label) -> dict:
             logger.warning(f"Missing sensorimotor item: {w}")
             best_translation = _get_best_sensorimotor_translation(model.sensorimotor_component, w)
             if best_translation is not None:
-                logger.warning(f" Instead trying translation {...}")
+                logger.warning(f" Instead trying translation {best_translation}")
                 return model.sensorimotor_component.propagator.activation_of_item_with_label(best_translation)
             else:
                 return None
@@ -116,7 +116,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
 
     # Set up output directories
-    response_dir: Path = Path(Preferences.output_dir, "Category verification TEST", job_spec.output_location_relative())
+    response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
     if filter_events is not None:
         response_dir = Path(response_dir.parent, response_dir.name + f" only {filter_events}")
     if not response_dir.is_dir():
@@ -176,18 +176,22 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             logger.warning(f"Could not look up prevalence as {object_label} is not in the sensorimotor norms")
             object_prevalence = 1.0
 
-        # (1) Activate the initial category label
+        # Activate the initial category label in the linguistic component only
         try:
             model.linguistic_component.propagator.activate_items_with_labels(
                 labels=category_multiword_parts,
                 activation=FULL_ACTIVATION / len(category_multiword_parts))
-        except ItemNotFoundError as e:
-            logger.error(f"Missing linguistic item: {category_label}")
-            # raise e
-            continue  # TODO: temporarily we don't raise, we just note the problem. Later we can decide what to do.
+        except ItemNotFoundError:
+            logger.error(f"Missing linguistic item for category: {category_label}")
+            # Missing item, can make no sensible prediction
+            continue
+
         # Start the clock
-        for _ in range(0, job_spec.run_for_ticks):
-            # Apply incremental activation during the immediate post-SOA period
+        while True:
+            if model.clock > job_spec.run_for_ticks:
+                break
+
+            # Apply incremental activation during the immediate post-SOA period in both components
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
 
                 # Activate sensorimotor item directly
@@ -195,20 +199,20 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
                     activate_sensorimotor_item(
                         label=object_label,
                         activation=object_activation_increment)
-                except ItemNotFoundError as e:
-                    logger.error(f"Missing sensorimotor item: {object_label}")
-                    # raise e
-                    pass  # TODO: decide what to do here too
+                except ItemNotFoundError:
+                    logger.error(f"Missing sensorimotor item for object: {object_label}")
+                    # Missing item, can make no sensible prediction
+                    break
                 # Activate linguistic items separately
                 try:
                     model.linguistic_component.propagator.activate_items_with_labels(
                         labels=object_multiword_parts,
                         # Attenuate linguistic activation by object label prevalence
                         activation=object_activation_increment * object_prevalence / len(object_multiword_parts))
-                except ItemNotFoundError as e:
-                    logger.error(f"Missing linguistic items: {object_multiword_parts}")
-                    # raise e
-                    pass  # TODO: decide what to do here too
+                except ItemNotFoundError:
+                    logger.error(f"Missing linguistic items for object: {object_multiword_parts}")
+                    # Missing item, can make no sensible prediction
+                    break
 
             # Advance the model
             model.tick()
