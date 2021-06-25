@@ -21,6 +21,7 @@ from pathlib import Path
 from sys import argv
 from typing import Optional
 
+from numpy import nan
 from pandas import DataFrame
 
 from os import path
@@ -46,7 +47,7 @@ from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import Sens
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
-from framework.data.category_verification_data import CategoryVerificationItemData
+from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
 from framework.utils import decompose_multiword
@@ -74,47 +75,52 @@ def _get_best_sensorimotor_translation(sensorimotor_component: SensorimotorCompo
     return None
 
 
-def _get_activation_data(model, category_label, object_label) -> dict:
-    """Gets all the relevant activation data in the form of a dictionary."""
-    # TODO: Is this the right way to be going about this?
-    def get_linguistic_activation_safe(w: str):
-        """Get linguistic activations but return None in case of a missing item."""
+def _get_activation_data(model, category_multiword_parts, category_label_sensorimotor, object_multiword_parts,
+                         object_label_sensorimotor):
+    # We already know that linguistic category terms exist, as we've activated them (or failed to) before
+    category_activation_linguistic_dict = {
+        CATEGORY_ACTIVATION_LINGUISTIC_f.format(part)
+        : model.linguistic_component.propagator.activation_of_item_with_label(part)
+        for part in category_multiword_parts
+    }
+    # For the sensorimotor category, we need to check that it exists, and skip it if it doesn't
+    try:
+        category_activation_sensorimotor_dict = {
+            CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(category_label_sensorimotor)
+            : model.sensorimotor_component.propagator.activation_of_item_with_label(category_label_sensorimotor)
+        }
+    except ItemNotFoundError:
+        # If the item isn't found in total, we can check for individual components
+        # We haven't done this before because we don't ever activate the category in the sensorimotor component
+        # directly.
         try:
-            return model.linguistic_component.propagator.activation_of_item_with_label(w)
-        except KeyError:
-            logger.warning(f"Missing linguistic word: {w}")
-            return None
-
-    def get_sensorimotor_activation_safe(w: str):
-        """Get sensorimotor activations, trying for translation where necessary, and returning None in case of a missing
-         item."""
-        try:
-            return model.sensorimotor_component.propagator.activation_of_item_with_label(w)
-        except KeyError:
-            logger.warning(f"Missing sensorimotor item: {w}")
-            best_translation = _get_best_sensorimotor_translation(model.sensorimotor_component, w)
-            if best_translation is not None:
-                logger.warning(f" Instead trying translation {...}")
-                return model.sensorimotor_component.propagator.activation_of_item_with_label(best_translation)
-            else:
-                return None
-
+            category_activation_sensorimotor_dict = {
+                CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(part)
+                : model.sensorimotor_component.propagator.activation_of_item_with_label(part)
+                for part in decompose_multiword(category_label_sensorimotor)
+            }
+        except ItemNotFoundError:
+            # If this item really doesn't exist, we can omit the activation
+            category_activation_sensorimotor_dict = {
+                CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(category_label_sensorimotor)
+                : nan
+            }
+    # We know that linguistic and sensorimotor objects exist
+    object_activation_linguistic_dict = {
+        OBJECT_ACTIVATION_LINGUISTIC_f.format(part)
+        : model.linguistic_component.propagator.activation_of_item_with_label(part)
+        for part in object_multiword_parts
+    }
+    object_activation_sensorimotor_dict = {
+        OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)
+        : model.sensorimotor_component.propagator.activation_of_item_with_label(object_label_sensorimotor)
+    }
     return {
         CLOCK: model.clock,
-        **{
-            CATEGORY_ACTIVATION_LINGUISTIC_f.format(part)
-            : get_linguistic_activation_safe(part)
-            for part in decompose_multiword(category_label)
-        },
-        CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(category_label)
-        : get_sensorimotor_activation_safe(category_label),
-        **{
-            OBJECT_ACTIVATION_LINGUISTIC_f.format(part)
-            : get_linguistic_activation_safe(part)
-            for part in decompose_multiword(object_label)
-        },
-        OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label)
-        : get_sensorimotor_activation_safe(object_label)
+        **category_activation_linguistic_dict,
+        **category_activation_sensorimotor_dict,
+        **object_activation_linguistic_dict,
+        **object_activation_sensorimotor_dict,
     }
 
 
@@ -124,7 +130,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
 
     # Set up output directories
-    response_dir: Path = Path(Preferences.output_dir, "Category verification TEST", job_spec.output_location_relative())
+    response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
     if filter_events is not None:
         response_dir = Path(response_dir.parent, response_dir.name + f" only {filter_events}")
     if not response_dir.is_dir():
@@ -171,52 +177,63 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
 
         activation_tracking_path = Path(response_dir, f"{category_label}-{object_label}.csv")
         activation_tracking_data = []
-        model.reset()
 
-        category_multiword_parts = decompose_multiword(category_label)
-        object_multiword_parts = decompose_multiword(object_label)
+        category_label_linguistic = apply_substitution_if_available(category_label, cv_item_data.substitutions_linguistic)
+        category_label_sensorimotor = apply_substitution_if_available(category_label, cv_item_data.substitutions_sensorimotor)
+        object_label_linguistic = apply_substitution_if_available(object_label, cv_item_data.substitutions_linguistic)
+        object_label_sensorimotor = apply_substitution_if_available(object_label, cv_item_data.substitutions_sensorimotor)
 
         object_prevalence: float
         try:
-            object_prevalence = scale_prevalence_01(prevalence_from_fraction_known(_sn.fraction_known(object_label)))
+            object_prevalence = scale_prevalence_01(
+                prevalence_from_fraction_known(_sn.fraction_known(object_label_sensorimotor)))
         except WordNotInNormsError:
             # In case the word isn't in the norms, make that known, but fall back to full prevalence
-            logger.warning(f"Could not look up prevalence as {object_label} is not in the sensorimotor norms")
             object_prevalence = 1.0
+            logger.warning(f"Could not look up prevalence as {object_label} is not in the sensorimotor norms.")
+            logger.warning(f"\tUsing a default of {object_prevalence} instead.")
 
-        # (1) Activate the initial category label
+        model.reset()
+
+        # Activate the initial category label in the linguistic component only
+        category_label_linguistic_multiword_parts = decompose_multiword(category_label_linguistic)
+        object_label_linguistic_multiword_parts = decompose_multiword(object_label_linguistic)
         try:
             model.linguistic_component.propagator.activate_items_with_labels(
-                labels=category_multiword_parts,
-                activation=FULL_ACTIVATION / len(category_multiword_parts))
-        except ItemNotFoundError as e:
-            logger.error(f"Missing linguistic item: {category_label}")
-            # raise e
-            continue  # TODO: temporarily we don't raise, we just note the problem. Later we can decide what to do.
+                labels=category_label_linguistic_multiword_parts,
+                activation=FULL_ACTIVATION / len(category_label_linguistic_multiword_parts))
+        except ItemNotFoundError:
+            logger.error(f"Missing linguistic item for category: {category_label} ({category_label_linguistic})")
+            # Missing item, can make no sensible prediction
+            continue
+
         # Start the clock
-        for _ in range(0, job_spec.run_for_ticks):
-            # Apply incremental activation during the immediate post-SOA period
+        while True:
+            if model.clock > job_spec.run_for_ticks:
+                break
+
+            # Apply incremental activation during the immediate post-SOA period in both components
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
 
                 # Activate sensorimotor item directly
                 try:
                     activate_sensorimotor_item(
-                        label=object_label,
+                        label=object_label_sensorimotor,
                         activation=object_activation_increment)
-                except ItemNotFoundError as e:
-                    logger.error(f"Missing sensorimotor item: {object_label}")
-                    # raise e
-                    pass  # TODO: decide what to do here too
+                except ItemNotFoundError:
+                    logger.error(f"Missing sensorimotor item for object: {object_label} ({object_label_sensorimotor})")
+                    # Missing item, can make no sensible prediction
+                    break
                 # Activate linguistic items separately
                 try:
                     model.linguistic_component.propagator.activate_items_with_labels(
-                        labels=object_multiword_parts,
+                        labels=object_label_linguistic_multiword_parts,
                         # Attenuate linguistic activation by object label prevalence
-                        activation=object_activation_increment * object_prevalence / len(object_multiword_parts))
-                except ItemNotFoundError as e:
-                    logger.error(f"Missing linguistic items: {object_multiword_parts}")
-                    # raise e
-                    pass  # TODO: decide what to do here too
+                        activation=object_activation_increment * object_prevalence / len(object_label_linguistic_multiword_parts))
+                except ItemNotFoundError:
+                    logger.error(f"Missing linguistic items for object: {object_label} ({object_label_linguistic})")
+                    # Missing item, can make no sensible prediction
+                    break
 
             # Advance the model
             model.tick()
@@ -225,7 +242,9 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             # Record the relevant activations
             # There are a variable number of columns, depending on whether the items contain multiple words or not.
             # Therefore we record it in a list[dict] and build it into a DataFrame later for saving.
-            activation_tracking_data.append(_get_activation_data(model, category_label, object_label))
+            activation_tracking_data.append(_get_activation_data(model,
+                                            category_label_linguistic_multiword_parts, category_label_sensorimotor,
+                                            object_label_linguistic_multiword_parts, object_label_sensorimotor))
 
         with activation_tracking_path.open("w") as file:
             DataFrame(activation_tracking_data).to_csv(file, index=False)
