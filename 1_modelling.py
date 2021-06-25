@@ -175,6 +175,13 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
         object_label_linguistic = apply_substitution_if_available(object_label, cv_item_data.substitutions_linguistic)
         object_label_sensorimotor = apply_substitution_if_available(object_label, cv_item_data.substitutions_sensorimotor)
 
+        category_label_linguistic_multiword_parts = decompose_multiword(category_label_linguistic)
+        object_label_linguistic_multiword_parts = decompose_multiword(object_label_linguistic)
+
+        # Terms that are required for this model to proceed.
+        required_sensorimotor_terms = [*category_label_linguistic_multiword_parts, ]
+        required_linguistic_terms = [*category_label_linguistic_multiword_parts]
+
         object_prevalence: float
         try:
             object_prevalence = scale_prevalence_01(
@@ -188,8 +195,6 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
         model.reset()
 
         # Activate the initial category label in the linguistic component only
-        category_label_linguistic_multiword_parts = decompose_multiword(category_label_linguistic)
-        object_label_linguistic_multiword_parts = decompose_multiword(object_label_linguistic)
         try:
             model.linguistic_component.propagator.activate_items_with_labels(
                 labels=category_label_linguistic_multiword_parts,
@@ -200,32 +205,37 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             continue
 
         # Start the clock
+        back_out: bool = False  # Yes, this is ugly and fragile, but since Python doesn't have named loops I can't find a more readable way to do it.
         while True:
             if model.clock > job_spec.run_for_ticks:
                 break
 
             # Apply incremental activation during the immediate post-SOA period in both components
-            if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
-
-                # Activate sensorimotor item directly
-                try:
-                    activate_sensorimotor_item(
-                        label=object_label_sensorimotor,
-                        activation=object_activation_increment)
-                except ItemNotFoundError:
-                    logger.error(f"Missing sensorimotor item for object: {object_label} ({object_label_sensorimotor})")
-                    # Missing item, can make no sensible prediction
-                    break
-                # Activate linguistic items separately
-                try:
-                    model.linguistic_component.propagator.activate_items_with_labels(
-                        labels=object_label_linguistic_multiword_parts,
-                        # Attenuate linguistic activation by object label prevalence
-                        activation=object_activation_increment * object_prevalence / len(object_label_linguistic_multiword_parts))
-                except ItemNotFoundError:
+            # We won't do this on the first tick, but we do want to check and make sure that it won't fail in advance
+            if object_label_sensorimotor not in model.sensorimotor_component.available_labels:
+                logger.error(f"Missing sensorimotor item for object: {object_label} ({object_label_sensorimotor})")
+                # Missing item, can make no sensible prediction
+                back_out = True
+                break
+            for part in object_label_linguistic_multiword_parts:
+                if part not in model.linguistic_component.available_labels:
                     logger.error(f"Missing linguistic items for object: {object_label} ({object_label_linguistic})")
                     # Missing item, can make no sensible prediction
+                    back_out = True
                     break
+            if back_out:
+                break
+            # Do the actual incremental activation
+            if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
+                # Activate sensorimotor item directly
+                activate_sensorimotor_item(
+                    label=object_label_sensorimotor,
+                    activation=object_activation_increment)
+                # Activate linguistic items separately
+                model.linguistic_component.propagator.activate_items_with_labels(
+                    labels=object_label_linguistic_multiword_parts,
+                    # Attenuate linguistic activation by object label prevalence
+                    activation=object_activation_increment * object_prevalence / len(object_label_linguistic_multiword_parts))
 
             # Advance the model
             model.tick()
@@ -237,6 +247,9 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
             activation_tracking_data.append(_get_activation_data(model,
                                             category_label_linguistic_multiword_parts, category_label_sensorimotor,
                                             object_label_linguistic_multiword_parts, object_label_sensorimotor))
+
+        if back_out:
+            continue
 
         with activation_tracking_path.open("w") as file:
             DataFrame(activation_tracking_data).to_csv(file, index=False)
