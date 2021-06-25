@@ -23,14 +23,6 @@ class Job_1(CategoryVerificationJob):
             return 120
 
     LING_RAM: Dict[str, Dict[int, int]] = {
-        "pmi_ngram": {
-            1_000: 2,
-            3_000: 3,
-            10_000: 7,
-            30_000: 11,
-            40_000: 15,
-            60_000: 20,
-        },
         "ppmi_ngram": {
             1_000: 2,
             3_000: 3,
@@ -62,7 +54,7 @@ if __name__ == '__main__':
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(
-            Path(Path(__file__).parent, "job_specifications/2021-05-21 good example model.yaml")):
+            Path(Path(__file__).parent, "job_specifications/2021-05-25 search for more sensible parameters.yaml")):
         for cca in ccas:
             spec = deepcopy(s)
             spec.cross_component_attenuation = cca
