@@ -26,7 +26,7 @@ from pandas import read_csv, DataFrame
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
 from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available
-from framework.evaluation.column_names import CLOCK, OBJECT_ACTIVATION_SENSORIMOTOR_f
+from framework.evaluation.column_names import CLOCK, OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.utils import decompose_multiword
 
 logger = getLogger(__name__)
@@ -60,15 +60,27 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: ActivationVa
         model_data: DataFrame = read_csv(model_output_path, header=0, index_col=CLOCK, dtype={CLOCK: int})
 
         # set level prior to SOA
-        below_no = model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[spec.soa_ticks] < decision_threshold_no
-        above_yes = model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[spec.soa_ticks] > decision_threshold_yes
+        below_no = (
+                (model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[spec.soa_ticks] < decision_threshold_no)
+                or any(model_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(oll)].loc[spec.soa_ticks] < decision_threshold_no
+                       for oll in object_label_linguistic_multiword_parts))
+        above_yes = (
+                (model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[spec.soa_ticks] > decision_threshold_yes)
+                or any(model_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(oll)].loc[spec.soa_ticks] > decision_threshold_yes
+                       for oll in object_label_linguistic_multiword_parts))
 
         decision_made = False
         for tick in range(spec.soa_ticks + 1, spec.run_for_ticks):
             previously_below_no = below_no
             previously_above_yes = above_yes
-            below_no = model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[tick] < decision_threshold_no
-            above_yes = model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[tick] > decision_threshold_yes
+            below_no = (
+                    (model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[tick] < decision_threshold_no)
+                    or any(model_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(oll)].loc[tick] < decision_threshold_no
+                           for oll in object_label_linguistic_multiword_parts))
+            above_yes = (
+                    (model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[tick] > decision_threshold_yes)
+                    or any(model_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(oll)].loc[tick] > decision_threshold_yes
+                           for oll in object_label_linguistic_multiword_parts))
 
             if below_no and not previously_below_no:
                 logger.info(f"{category_label}-{object_label}: {tick} NO!")
