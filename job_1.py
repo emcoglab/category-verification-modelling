@@ -49,7 +49,7 @@ class Job_1(CategoryVerificationJob):
 if __name__ == '__main__':
 
     # Testing everything with a range of CCAs
-    ccas = [0, .5, 1]
+    ccas = [1, .5, 0]
 
     jobs = []
     s: CategoryVerificationJobSpec
