@@ -345,7 +345,6 @@ if __name__ == '__main__':
             incremental_activation_duration=args.object_activation_duration,
         ),
         use_prepruned=args.sensorimotor_use_prepruned,
-        filter_events=args.filter_events,
     )
 
     logger.info("Done!")

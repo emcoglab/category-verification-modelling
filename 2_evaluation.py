@@ -26,11 +26,11 @@ from pathlib import Path
 from typing import Optional, List, Tuple
 
 from pandas import read_csv, DataFrame
-from numpy import linspace
 
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
-from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available
+from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available, \
+    ColNames
 from framework.evaluation.column_names import CLOCK, OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.utils import decompose_multiword
 
@@ -43,7 +43,7 @@ ARG_DATASET_TRAIN = "train"
 ARG_DATASET_TEST  = "test"
 
 # Paths
-root_input_dir = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
+ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
 
 
 class Decision(Enum):
@@ -167,54 +167,74 @@ def check_decision(decision: Optional[Decision], category_verification_correct: 
 
 
 def hitrate_for_thresholds(decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
-                           spec: CategoryVerificationJobSpec):
+                           spec: CategoryVerificationJobSpec, save_dir: Path):
 
     cv_item_data: CategoryVerificationItemData = CategoryVerificationItemData()
 
-    model_output_dir = Path(root_input_dir, spec.output_location_relative())
+    model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
 
     logger.info(f"Loading model activation logs from {model_output_dir.as_posix()}")
 
+    ground_truth_dataframe = cv_item_data.dataframe
+
     model_correct_count: int = 0
     model_total_count: int = 0
+    model_guesses = []
     for category_label, object_label in cv_item_data.category_object_pairs():
         model_total_count += 1
         model_output_path = Path(model_output_dir, f"{category_label}-{object_label}.csv")
         if not model_output_path.exists():
-            logger.warning(f"{model_output_path.name} not found.")
+            # logger.warning(f"{model_output_path.name} not found.")
             continue
 
         model_data: DataFrame = read_csv(model_output_path, header=0, index_col=CLOCK, dtype={CLOCK: int})
 
         category_verification_correct: bool = cv_item_data.is_correct(category_label, object_label)
 
-        decision: Optional[Decision] = make_model_decision(object_label,
-                                                           decision_threshold_no, decision_threshold_yes,
-                                                           cv_item_data, model_data,
-                                                           spec)
+        model_decisoin: Optional[Decision] = make_model_decision(object_label,
+                                                                 decision_threshold_no, decision_threshold_yes,
+                                                                 cv_item_data, model_data,
+                                                                 spec)
 
-        model_correct: bool = check_decision(decision, category_verification_correct)
+        model_correct: bool = check_decision(model_decisoin, category_verification_correct)
+
+        model_guesses.append((category_label, object_label, model_decisoin, model_correct))
         if model_correct:
             model_correct_count += 1
-
+    model_guesses = DataFrame.from_records(model_guesses, columns=[
+        ColNames.CategoryLabel, ColNames.ImageObject, "Model decision", "Model is correct"
+    ])
     model_hitrate = model_correct_count / model_total_count
+
+    results_dataframe = ground_truth_dataframe.merge(model_guesses,
+                                                     how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
+
+    # Save individual threshold data for verification
+    save_dir.mkdir(parents=True, exist_ok=True)
+    with Path(save_dir, f"no{decision_threshold_no}_yes{decision_threshold_yes}.csv").open("w") as f:
+        results_dataframe.to_csv(f, header=True, index=False)
+
     return model_hitrate
 
 
 def main(spec: CategoryVerificationJobSpec):
 
+    thresholds = [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]  # linspace was causing weird float rounding errors
+    save_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative(), " evaluation", "hitrates")
+    save_dir.mkdir(parents=True, exist_ok=True)
+
     hitrates = []
-    for decision_threshold_no in linspace(0, 1, 11):
-        for decision_threshold_yes in linspace(0, 1, 11):
+    for decision_threshold_no in thresholds:
+        for decision_threshold_yes in thresholds:
             if decision_threshold_no >= decision_threshold_yes:
                 continue
             hitrate = hitrate_for_thresholds(decision_threshold_yes=decision_threshold_yes,
                                              decision_threshold_no=decision_threshold_no,
-                                             spec=spec)
+                                             spec=spec, save_dir=save_dir)
             hitrates.append((decision_threshold_no, decision_threshold_yes, hitrate))
 
-    model_output_dir = Path(root_input_dir, spec.output_location_relative())
-    with Path(model_output_dir, " hitrates.csv").open("w") as f:
+    # Save overall hitrates
+    with Path(save_dir, "overall.csv").open("w") as f:
         DataFrame.from_records(hitrates,
                                columns=["Decision threshold (no)", "Decision threshold (yes)", "hitrate"],
                                ).to_csv(f, header=True, index=False)
@@ -224,9 +244,8 @@ if __name__ == '__main__':
     basicConfig(format=logger_format, datefmt=logger_dateformat, level=INFO)
     logger.info("Running %s" % " ".join(sys.argv))
 
-    loaded_specs = CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
-                                                                  "job_specifications",
-                                                                  "2021-06-25 search for more sensible parameters.yaml"))
+    loaded_specs = CategoryVerificationJobSpec.load_multiple(
+        Path(Path(__file__).parent, "job_specifications", "2021-06-25 search for more sensible parameters.yaml"))
     systematic_cca_test = True
 
     if systematic_cca_test:
@@ -241,7 +260,8 @@ if __name__ == '__main__':
     else:
         specs = loaded_specs
 
-    for spec in specs:
+    for i1, spec in enumerate(specs, start=1):
+        logger.info(f"Evaluating model {i1} of {len(specs)}")
         main(spec=spec)
 
     logger.info("Done!")
