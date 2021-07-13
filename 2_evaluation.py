@@ -23,7 +23,7 @@ from copy import deepcopy
 from enum import Enum
 from logging import getLogger, basicConfig, INFO
 from pathlib import Path
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 
 from pandas import read_csv, DataFrame
 
@@ -44,6 +44,10 @@ ARG_DATASET_TEST  = "test"
 
 # Paths
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
+
+# Shared
+CV_ITEM_DATA: CategoryVerificationItemData = CategoryVerificationItemData()
+THRESHOLDS = [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]  # linspace was causing weird float rounding errors
 
 
 class Decision(Enum):
@@ -170,36 +174,31 @@ def check_decision(decision: Optional[Decision], category_verification_correct: 
         return decision == Decision.No
 
 
-def hitrate_for_thresholds(decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
+def hitrate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
+                           decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
                            spec: CategoryVerificationJobSpec, save_dir: Path):
 
-    cv_item_data: CategoryVerificationItemData = CategoryVerificationItemData()
-
-    model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
-
-    logger.info(f"Loading model activation logs from {model_output_dir.as_posix()}")
-
-    ground_truth_dataframe = cv_item_data.dataframe
+    ground_truth_dataframe = CV_ITEM_DATA.dataframe
 
     model_correct_count: int = 0
     model_total_count: int = 0
     model_guesses = []
-    for category_label, object_label in cv_item_data.category_object_pairs():
+    for category_label, object_label in CV_ITEM_DATA.category_object_pairs():
         model_total_count += 1
-        model_output_path = Path(model_output_dir, f"{category_label}-{object_label}.csv")
-        if not model_output_path.exists():
-            # logger.warning(f"{model_output_path.name} not found.")
-            continue
 
-        model_data: DataFrame = read_csv(model_output_path, header=0, index_col=CLOCK, dtype={CLOCK: int})
-
-        category_verification_correct: bool = cv_item_data.is_correct(category_label, object_label)
+        category_verification_correct: bool = CV_ITEM_DATA.is_correct(category_label, object_label)
 
         model_decision: Optional[Decision]
         decision_made_at_time: Optional[int]
+        try:
+            model_data = all_model_data[(category_label, object_label)]
+        # No model output was saved
+        except KeyError:
+            continue
         model_decision, decision_made_at_time = make_model_decision(object_label,
                                                                     decision_threshold_no, decision_threshold_yes,
-                                                                    cv_item_data, model_data,
+                                                                    CV_ITEM_DATA,
+                                                                    model_data,
                                                                     spec)
 
         model_correct: bool = check_decision(model_decision, category_verification_correct)
@@ -225,16 +224,30 @@ def hitrate_for_thresholds(decision_threshold_yes: ActivationValue, decision_thr
 
 def main(spec: CategoryVerificationJobSpec):
 
-    thresholds = [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]  # linspace was causing weird float rounding errors
+    model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
     save_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative(), " evaluation", "hitrates")
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    # Only load the model data once, then just reference it for each hitrate.
+    # TODO: This is turning into spaghetti code, but let's get it working first.
+    logger.info(f"Loading model activation logs from {model_output_dir.as_posix()}")
+    # (object, item) -> model_data
+    all_model_data: Dict[Tuple[str, str], DataFrame] = dict()
+    for category_label, object_label in CV_ITEM_DATA.category_object_pairs():
+        model_output_path = Path(model_output_dir, f"{category_label}-{object_label}.csv")
+        if not model_output_path.exists():
+            # logger.warning(f"{model_output_path.name} not found.")
+            continue
+
+        all_model_data[(category_label, object_label)] = read_csv(model_output_path, header=0, index_col=CLOCK, dtype={CLOCK: int})
+
     hitrates = []
-    for decision_threshold_no in thresholds:
-        for decision_threshold_yes in thresholds:
+    for decision_threshold_no in THRESHOLDS:
+        for decision_threshold_yes in THRESHOLDS:
             if decision_threshold_no >= decision_threshold_yes:
                 continue
-            hitrate = hitrate_for_thresholds(decision_threshold_yes=decision_threshold_yes,
+            hitrate = hitrate_for_thresholds(all_model_data=all_model_data,
+                                             decision_threshold_yes=decision_threshold_yes,
                                              decision_threshold_no=decision_threshold_no,
                                              spec=spec, save_dir=save_dir)
             hitrates.append((decision_threshold_no, decision_threshold_yes, hitrate))
