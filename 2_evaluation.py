@@ -117,7 +117,7 @@ class _Decider:
         return None
 
 
-def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, cv_item_data, model_data, spec) -> Optional[Decision]:
+def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, cv_item_data, model_data, spec) -> Tuple[Optional[Decision], Optional[int]]:
     object_label_sensorimotor: str = apply_substitution_if_available(object_label,
                                                                      cv_item_data.substitutions_sensorimotor)
     object_label_linguistic: str = apply_substitution_if_available(object_label, cv_item_data.substitutions_linguistic)
@@ -129,6 +129,7 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
     ]
     decision_made = False
     decision = None
+    time = None
     for tick in range(spec.soa_ticks + 1, spec.run_for_ticks):
         sensorimotor_decision = sensorimotor_decider.test_activation_level(
             activation=model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[tick])
@@ -145,14 +146,17 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
         if linguistic_decision == Decision.No or sensorimotor_decision == Decision.No:
             decision_made = True
             decision = Decision.No
+            time = tick
             break
         if linguistic_decision == Decision.Yes or sensorimotor_decision == Decision.Yes:
             decision_made = True
             decision = Decision.Yes
+            time = tick
             break
     if not decision_made:
         decision = None
-    return decision
+        time = None
+    return decision, time
 
 
 def check_decision(decision: Optional[Decision], category_verification_correct: bool) -> bool:
@@ -191,18 +195,20 @@ def hitrate_for_thresholds(decision_threshold_yes: ActivationValue, decision_thr
 
         category_verification_correct: bool = cv_item_data.is_correct(category_label, object_label)
 
-        model_decisoin: Optional[Decision] = make_model_decision(object_label,
-                                                                 decision_threshold_no, decision_threshold_yes,
-                                                                 cv_item_data, model_data,
-                                                                 spec)
+        model_decision: Optional[Decision]
+        decision_made_at_time: Optional[int]
+        model_decision, decision_made_at_time = make_model_decision(object_label,
+                                                                    decision_threshold_no, decision_threshold_yes,
+                                                                    cv_item_data, model_data,
+                                                                    spec)
 
-        model_correct: bool = check_decision(model_decisoin, category_verification_correct)
+        model_correct: bool = check_decision(model_decision, category_verification_correct)
 
-        model_guesses.append((category_label, object_label, model_decisoin, model_correct))
+        model_guesses.append((category_label, object_label, model_decision, decision_made_at_time, model_correct))
         if model_correct:
             model_correct_count += 1
     model_guesses = DataFrame.from_records(model_guesses, columns=[
-        ColNames.CategoryLabel, ColNames.ImageObject, "Model decision", "Model is correct"
+        ColNames.CategoryLabel, ColNames.ImageObject, "Model decision", "Decision made at time", "Model is correct"
     ])
     model_hitrate = model_correct_count / model_total_count
 
