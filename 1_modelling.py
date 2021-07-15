@@ -52,10 +52,6 @@ from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUIS
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
 from framework.utils import decompose_multiword
 
-# arg choices: filter_events
-_ARG_ACCESSIBLE_SET = "accessible_set"
-_ARG_BUFFER         = "buffer"
-
 _sn = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
 
 
@@ -124,15 +120,13 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
     }
 
 
-def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_events: Optional[str]):
+def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
 
     # Validate spec
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
 
     # Set up output directories
     response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
-    if filter_events is not None:
-        response_dir = Path(response_dir.parent, response_dir.name + f" only {filter_events}")
     if not response_dir.is_dir():
         logger.warning(f"{response_dir} directory does not exist; making it.")
         response_dir.mkdir(parents=True)
@@ -185,10 +179,6 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool, filter_even
 
         category_label_linguistic_multiword_parts = decompose_multiword(category_label_linguistic)
         object_label_linguistic_multiword_parts = decompose_multiword(object_label_linguistic)
-
-        # Terms that are required for this model to proceed.
-        required_sensorimotor_terms = [*category_label_linguistic_multiword_parts, ]
-        required_linguistic_terms = [*category_label_linguistic_multiword_parts]
 
         object_prevalence: float
         try:
@@ -305,8 +295,6 @@ if __name__ == '__main__':
     parser.add_argument("--bailout", required=False, default=0, type=int)
     parser.add_argument("--run_for_ticks", required=True, type=int)
 
-    parser.add_argument("--filter_events", type=str, choices=[_ARG_BUFFER, _ARG_ACCESSIBLE_SET], default=None)
-
     parser.add_argument("--soa", type=int, required=True)
     parser.add_argument("--object_activation", type=ActivationValue, required=True)
     parser.add_argument("--object_activation_duration", type=int, required=True)
@@ -365,7 +353,6 @@ if __name__ == '__main__':
             incremental_activation_duration=args.object_activation_duration,
         ),
         use_prepruned=args.sensorimotor_use_prepruned,
-        filter_events=args.filter_events,
     )
 
     logger.info("Done!")

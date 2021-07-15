@@ -1,0 +1,82 @@
+# All of these will be submitted with CCA-attenuation at 0, .5 and 1.
+# Note to self: for thresholds we want ling ling <= sm ling <= sm sm <= ling sm.
+#   So I'm moving all these to the bottom of the spec
+
+# Different decays (from last time, but with 40k words
+- Bailout: 20000
+  Run for ticks: 500
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 1.0  # Make the decay look a little more sensible
+  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.975  # Not so fast
+  (Linguistic) Edge decay SD: 15.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0  # This will be overridden
+  # Thresholds
+  (Linguistic) Firing threshold: 0.35
+  (Linguistic) Accessible set threshold: 0.35
+  (Sensorimotor) Accessible set threshold: 0.4
+  Buffer threshold: 0.4
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
+  # New params
+  SOA: 59  # Median ttfa for rmr==1 responses produced by model is 332.5.
+           # Median RT for the same items is 2.82s. This gives 118.02 ticks/s, and SOA is 500ms: 59 ticks.
+  Object activation: 0.3  # Based on nothing yet
+  Incremental activation duration: 29  # Based on nothing; half the SOA
+
+# Different decays with longer SOA (40k)
+- Bailout: 20000
+  Run for ticks: 500
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 1.0  # Make the decay look a little more sensible
+  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.975  # Not so fast
+  (Linguistic) Edge decay SD: 15.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0  # This will be overridden
+  # Thresholds
+  (Linguistic) Firing threshold: 0.35
+  (Linguistic) Accessible set threshold: 0.35
+  (Sensorimotor) Accessible set threshold: 0.4
+  Buffer threshold: 0.4
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
+  # New params
+  SOA: 241  # for 40k words, the range of distances from category to object is 129-241.
+            # for sensorimotor, it's 97–241
+  Object activation: 0.3  # Based on nothing yet
+  Incremental activation duration: 121  # Based on nothing; half the SOA
+

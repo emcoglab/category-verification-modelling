@@ -49,12 +49,12 @@ class Job_1(CategoryVerificationJob):
 if __name__ == '__main__':
 
     # Testing everything with a range of CCAs
-    ccas = [0, .5, 1]
+    ccas = [1, .5, 0]
 
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(
-            Path(Path(__file__).parent, "job_specifications/2021-06-25 search for more sensible parameters.yaml")):
+            Path(Path(__file__).parent, "job_specifications/2021-07-15 40k different decay.yaml")):
         for cca in ccas:
             spec = deepcopy(s)
             spec.cross_component_attenuation = cca
