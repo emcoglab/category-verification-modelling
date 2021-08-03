@@ -25,8 +25,10 @@ from logging import getLogger, basicConfig, INFO
 from pathlib import Path
 from typing import List, Tuple, Dict
 
+from matplotlib import pyplot
 from numpy.random import seed
 from pandas import read_csv, DataFrame
+from seaborn import heatmap
 
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
@@ -216,10 +218,21 @@ def hitrate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
     return model_hitrate
 
 
+def save_heatmap(hitrates: DataFrame, path: Path):
+    pivot = hitrates.pivot(index="Decision threshold (no)", columns="Decision threshold (yes)", values="Hitrate")
+    ax = heatmap(pivot,
+                 annot=True, fmt=".02f",
+                 vmin=0, vmax=1, cmap='Reds',
+                 square = True,
+                 )
+    ax.figure.savefig(path)
+    pyplot.close(ax.figure)
+
+
 def main(spec: CategoryVerificationJobSpec):
 
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
-    save_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative(), " evaluation", "hitrates")
+    save_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative(), " evaluation")
     save_dir.mkdir(parents=True, exist_ok=True)
 
     # Only load the model data once, then just reference it for each hitrate.
@@ -243,14 +256,16 @@ def main(spec: CategoryVerificationJobSpec):
             hitrate = hitrate_for_thresholds(all_model_data=all_model_data,
                                              decision_threshold_yes=decision_threshold_yes,
                                              decision_threshold_no=decision_threshold_no,
-                                             spec=spec, save_dir=save_dir)
+                                             spec=spec, save_dir=Path(save_dir, "hitrates by threshold"))
             hitrates.append((decision_threshold_no, decision_threshold_yes, hitrate))
 
     # Save overall hitrates
-    with Path(save_dir, "overall.csv").open("w") as f:
-        DataFrame.from_records(hitrates,
-                               columns=["Decision threshold (no)", "Decision threshold (yes)", "hitrate"],
-                               ).to_csv(f, header=True, index=False)
+    hitrates_df = DataFrame.from_records(
+        hitrates,
+        columns=["Decision threshold (no)", "Decision threshold (yes)", "Hitrate"])
+    with Path(save_dir, "hitrates overall balanced.csv").open("w") as f:
+        hitrates_df.to_csv(f, header=True, index=False)
+    save_heatmap(hitrates_df, Path(save_dir, "hitrates overall balanced.png"))
 
     logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
 
