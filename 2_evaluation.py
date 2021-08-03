@@ -32,6 +32,7 @@ from seaborn import heatmap
 
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
+from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available, \
     ColNames
 from framework.evaluation.column_names import CLOCK, OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
@@ -89,11 +90,22 @@ class _Decider:
 
     def _above_yes(self, activation) -> bool:
         """True whenn activation is above the yes threshold."""
-        return activation >= self.threshold_yes
+        # In case the threshold is equal to the activation cap (i.e. FULL_ACTIVATION), floating-point arithmetic means
+        # we may never reach it. Therefore in this instance alone we reduce the threshold minutely when testing for
+        # aboveness.
+        if self.threshold_yes == FULL_ACTIVATION:
+            return activation >= self.threshold_yes - 1e-10
+        else:
+            return activation >= self.threshold_yes
 
     def _below_no(self, activation) -> bool:
-        """True whenn activation is below the no threshold."""
-        return activation <= self.threshold_no
+        """True when activation is below the no threshold."""
+        # In case the threshold is equal to zero (i.e. minimum activation), floating-point arithmetic means we may never
+        # reach it. So we raise the threshold minutely in this case only when testing for belowness.
+        if self.threshold_no == 0:
+            return activation <= self.threshold_no + 1e-10
+        else:
+            return activation <= self.threshold_no
 
     def _make_decision(self, activation) -> Decision:
         """The current decision, based on the current level of activation."""
