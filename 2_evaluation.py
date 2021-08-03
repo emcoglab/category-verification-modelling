@@ -25,6 +25,7 @@ from logging import getLogger, basicConfig, INFO
 from pathlib import Path
 from typing import List, Tuple, Dict
 
+from numpy.random import seed
 from pandas import read_csv, DataFrame
 
 from framework.cli.job import CategoryVerificationJobSpec
@@ -157,7 +158,7 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
 
 
 def check_decision(decision: Decision, category_verification_correct: bool) -> bool:
-    """Checks a Decision to see if it was correct. Returns True iff the deciion is correct."""
+    """Checks a Decision to see if it was correct. Returns True iff the decision is correct."""
     # When it's undecided or waiting, we default to no
     if (decision == Decision.Undecided) or (decision == Decision.Waiting):
         decision = Decision.No
@@ -171,12 +172,12 @@ def hitrate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
                            decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
                            spec: CategoryVerificationJobSpec, save_dir: Path):
 
-    ground_truth_dataframe = CV_ITEM_DATA.dataframe
+    ground_truth_dataframe = CV_ITEM_DATA.dataframe_balanced
 
     model_correct_count: int = 0
     model_total_count: int = 0
     model_guesses = []
-    for category_label, object_label in CV_ITEM_DATA.category_object_pairs():
+    for category_label, object_label in CV_ITEM_DATA.category_object_pairs(balanced=True):
         model_total_count += 1
 
         category_verification_correct: bool = CV_ITEM_DATA.is_correct(category_label, object_label)
@@ -226,7 +227,7 @@ def main(spec: CategoryVerificationJobSpec):
     logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
     # (object, item) -> model_data
     all_model_data: Dict[Tuple[str, str], DataFrame] = dict()
-    for category_label, object_label in CV_ITEM_DATA.category_object_pairs():
+    for category_label, object_label in CV_ITEM_DATA.category_object_pairs(balanced=True):
         model_output_path = Path(model_output_dir, f"{category_label}-{object_label}.csv")
         if not model_output_path.exists():
             # logger.warning(f"{model_output_path.name} not found.")
@@ -257,6 +258,8 @@ def main(spec: CategoryVerificationJobSpec):
 if __name__ == '__main__':
     basicConfig(format=logger_format, datefmt=logger_dateformat, level=INFO)
     logger.info("Running %s" % " ".join(sys.argv))
+
+    seed(1)  # Reproducible results
 
     loaded_specs = CategoryVerificationJobSpec.load_multiple(
         Path(Path(__file__).parent, "job_specifications", "2021-06-25 search for more sensible parameters.yaml"))
