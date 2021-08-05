@@ -26,9 +26,10 @@ from pandas import DataFrame
 
 from framework.cli.job import CategoryVerificationJobSpec, LinguisticPropagationJobSpec, SensorimotorPropagationJobSpec
 from framework.cognitive_model.attenuation_statistic import AttenuationStatistic
-from framework.cognitive_model.basic_types import ActivationValue, Length
+from framework.cognitive_model.basic_types import ActivationValue, Length, Component
 from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
 from framework.cognitive_model.components import FULL_ACTIVATION
+from framework.cognitive_model.events import ItemEnteredBufferEvent
 from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_components import LinguisticComponent
 from framework.cognitive_model.preferences.preferences import Preferences
@@ -122,6 +123,10 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
     if not response_dir.is_dir():
         logger.warning(f"{response_dir} directory does not exist; making it.")
         response_dir.mkdir(parents=True)
+    activation_tracking_dir = Path(response_dir, "activation traces")
+    buffer_entries_dir = Path(response_dir, "buffer entries")
+    activation_tracking_dir.mkdir(exist_ok=True)
+    buffer_entries_dir.mkdir(exist_ok=True)
 
     # Set up model
     model = InteractiveCombinedCognitiveModel(
@@ -163,8 +168,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
 
     for category_label, object_label in cv_item_data.category_object_pairs():
 
-        activation_tracking_path = Path(response_dir, f"{category_label}-{object_label}.csv")
-        activation_tracking_data = []
+        activation_tracking_path = Path(activation_tracking_dir, f"{category_label}-{object_label} activation.csv")
+        buffer_entries_path = Path(buffer_entries_dir, f"{category_label}-{object_label} buffer.csv")
 
         category_label_linguistic = apply_substitution_if_available(category_label, cv_item_data.substitutions_linguistic)
         category_label_sensorimotor = apply_substitution_if_available(category_label, cv_item_data.substitutions_sensorimotor)
@@ -197,6 +202,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
             continue
 
         # Start the clock
+        activation_tracking_data = []
+        buffer_entries = []
         back_out: bool = False  # Yes, this is ugly and fragile, but since Python doesn't have named loops I can't find a more readable way to do it.
         while True:
             if model.clock > job_spec.run_for_ticks:
@@ -232,7 +239,24 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
                     with_suppression=True)
 
             # Advance the model
-            model.tick()
+            tick_events = model.tick()
+
+            # Record buffer entries
+            buffer_events = [e for e in tick_events if isinstance(e, ItemEnteredBufferEvent)]
+            buffer_entries.extend([
+                {
+                    "Clock": e.time,
+                    "Item ID": e.item.idx,
+                    "Item label": (
+                        (model.sensorimotor_component if e.item.component == Component.sensorimotor
+                         else model.linguistic_component)
+                        .propagator.idx2label[e.item.idx]),
+                    "Activation": e.activation,
+                    "Component": e.item.component,
+                }
+                for e in buffer_events
+            ])
+
             logger.info(f"Clock = {model.clock}")
 
             # Record the relevant activations
@@ -247,6 +271,9 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
 
         with activation_tracking_path.open("w") as file:
             DataFrame(activation_tracking_data).to_csv(file, index=False)
+
+        with buffer_entries_path.open("w") as file:
+            DataFrame(buffer_entries).to_csv(file, index=False)
 
 
 if __name__ == '__main__':

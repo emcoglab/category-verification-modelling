@@ -253,7 +253,7 @@ def main(spec: CategoryVerificationJobSpec):
     # (object, item) -> model_data
     all_model_data: Dict[Tuple[str, str], DataFrame] = dict()
     for category_label, object_label in CV_ITEM_DATA.category_object_pairs(balanced=True):
-        model_output_path = Path(model_output_dir, f"{category_label}-{object_label}.csv")
+        model_output_path = Path(model_output_dir, "activation traces", f"{category_label}-{object_label}.csv")
         if not model_output_path.exists():
             # logger.warning(f"{model_output_path.name} not found.")
             continue
