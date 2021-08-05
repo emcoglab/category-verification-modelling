@@ -25,10 +25,14 @@ from logging import getLogger, basicConfig, INFO
 from pathlib import Path
 from typing import List, Tuple, Dict
 
+from matplotlib import pyplot
+from numpy.random import seed
 from pandas import read_csv, DataFrame
+from seaborn import heatmap
 
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
+from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available, \
     ColNames
 from framework.evaluation.column_names import CLOCK, OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
@@ -86,11 +90,22 @@ class _Decider:
 
     def _above_yes(self, activation) -> bool:
         """True whenn activation is above the yes threshold."""
-        return activation >= self.threshold_yes
+        # In case the threshold is equal to the activation cap (i.e. FULL_ACTIVATION), floating-point arithmetic means
+        # we may never reach it. Therefore in this instance alone we reduce the threshold minutely when testing for
+        # aboveness.
+        if self.threshold_yes == FULL_ACTIVATION:
+            return activation >= self.threshold_yes - 1e-10
+        else:
+            return activation >= self.threshold_yes
 
     def _below_no(self, activation) -> bool:
-        """True whenn activation is below the no threshold."""
-        return activation <= self.threshold_no
+        """True when activation is below the no threshold."""
+        # In case the threshold is equal to zero (i.e. minimum activation), floating-point arithmetic means we may never
+        # reach it. So we raise the threshold minutely in this case only when testing for belowness.
+        if self.threshold_no == 0:
+            return activation <= self.threshold_no + 1e-10
+        else:
+            return activation <= self.threshold_no
 
     def _make_decision(self, activation) -> Decision:
         """The current decision, based on the current level of activation."""
@@ -157,7 +172,7 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
 
 
 def check_decision(decision: Decision, category_verification_correct: bool) -> bool:
-    """Checks a Decision to see if it was correct. Returns True iff the deciion is correct."""
+    """Checks a Decision to see if it was correct. Returns True iff the decision is correct."""
     # When it's undecided or waiting, we default to no
     if (decision == Decision.Undecided) or (decision == Decision.Waiting):
         decision = Decision.No
@@ -171,12 +186,12 @@ def hitrate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
                            decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
                            spec: CategoryVerificationJobSpec, save_dir: Path):
 
-    ground_truth_dataframe = CV_ITEM_DATA.dataframe
+    ground_truth_dataframe = CV_ITEM_DATA.dataframe_balanced
 
     model_correct_count: int = 0
     model_total_count: int = 0
     model_guesses = []
-    for category_label, object_label in CV_ITEM_DATA.category_object_pairs():
+    for category_label, object_label in CV_ITEM_DATA.category_object_pairs(balanced=True):
         model_total_count += 1
 
         category_verification_correct: bool = CV_ITEM_DATA.is_correct(category_label, object_label)
@@ -215,10 +230,21 @@ def hitrate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
     return model_hitrate
 
 
+def save_heatmap(hitrates: DataFrame, path: Path):
+    pivot = hitrates.pivot(index="Decision threshold (no)", columns="Decision threshold (yes)", values="Hitrate")
+    ax = heatmap(pivot,
+                 annot=True, fmt=".02f",
+                 vmin=0, vmax=1, cmap='Reds',
+                 square = True,
+                 )
+    ax.figure.savefig(path)
+    pyplot.close(ax.figure)
+
+
 def main(spec: CategoryVerificationJobSpec):
 
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
-    save_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative(), " evaluation", "hitrates")
+    save_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative(), " evaluation")
     save_dir.mkdir(parents=True, exist_ok=True)
 
     # Only load the model data once, then just reference it for each hitrate.
@@ -226,8 +252,8 @@ def main(spec: CategoryVerificationJobSpec):
     logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
     # (object, item) -> model_data
     all_model_data: Dict[Tuple[str, str], DataFrame] = dict()
-    for category_label, object_label in CV_ITEM_DATA.category_object_pairs():
-        model_output_path = Path(model_output_dir, f"{category_label}-{object_label}.csv")
+    for category_label, object_label in CV_ITEM_DATA.category_object_pairs(balanced=True):
+        model_output_path = Path(model_output_dir, "activation traces", f"{category_label}-{object_label}.csv")
         if not model_output_path.exists():
             # logger.warning(f"{model_output_path.name} not found.")
             continue
@@ -242,14 +268,16 @@ def main(spec: CategoryVerificationJobSpec):
             hitrate = hitrate_for_thresholds(all_model_data=all_model_data,
                                              decision_threshold_yes=decision_threshold_yes,
                                              decision_threshold_no=decision_threshold_no,
-                                             spec=spec, save_dir=save_dir)
+                                             spec=spec, save_dir=Path(save_dir, "hitrates by threshold"))
             hitrates.append((decision_threshold_no, decision_threshold_yes, hitrate))
 
     # Save overall hitrates
-    with Path(save_dir, "overall.csv").open("w") as f:
-        DataFrame.from_records(hitrates,
-                               columns=["Decision threshold (no)", "Decision threshold (yes)", "hitrate"],
-                               ).to_csv(f, header=True, index=False)
+    hitrates_df = DataFrame.from_records(
+        hitrates,
+        columns=["Decision threshold (no)", "Decision threshold (yes)", "Hitrate"])
+    with Path(save_dir, "hitrates overall balanced.csv").open("w") as f:
+        hitrates_df.to_csv(f, header=True, index=False)
+    save_heatmap(hitrates_df, Path(save_dir, "hitrates overall balanced.png"))
 
     logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
 
@@ -257,6 +285,8 @@ def main(spec: CategoryVerificationJobSpec):
 if __name__ == '__main__':
     basicConfig(format=logger_format, datefmt=logger_dateformat, level=INFO)
     logger.info("Running %s" % " ".join(sys.argv))
+
+    seed(1)  # Reproducible results
 
     loaded_specs = CategoryVerificationJobSpec.load_multiple(
         Path(Path(__file__).parent, "job_specifications", "2021-06-25 search for more sensible parameters.yaml"))
