@@ -146,16 +146,18 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
 
-    def activate_sensorimotor_item(label, activation):
+    def _activate_sensorimotor_item(label, activation, with_suppression):
         """Handles activation of sensorimotor item with translation if necessary."""
         if label in model.sensorimotor_component.available_labels:
-            model.sensorimotor_component.propagator.activate_item_with_label(label, activation)
+            model.sensorimotor_component.propagator.activate_item_with_label(label, activation,
+                                                                             with_suppression=with_suppression)
         else:
             logger.warning(f"Missing sensorimotor item: {label}")
             translation = _get_best_sensorimotor_translation(model.sensorimotor_component, label)
             if translation is not None:
                 logger.warning(f" Attempting with translation: {translation}")
-                model.sensorimotor_component.propagator.activate_item_with_label(translation, activation)
+                model.sensorimotor_component.propagator.activate_item_with_label(translation, activation,
+                                                                                 with_suppression=with_suppression)
             else:
                 logger.error(f" No translations available")
 
@@ -218,14 +220,16 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
             # Do the actual incremental activation
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
                 # Activate sensorimotor item directly
-                activate_sensorimotor_item(
+                _activate_sensorimotor_item(
                     label=object_label_sensorimotor,
-                    activation=object_activation_increment)
+                    activation=object_activation_increment,
+                    with_suppression=True)
                 # Activate linguistic items separately
                 model.linguistic_component.propagator.activate_items_with_labels(
                     labels=object_label_linguistic_multiword_parts,
                     # Attenuate linguistic activation by object label prevalence
-                    activation=object_activation_increment * object_prevalence / len(object_label_linguistic_multiword_parts))
+                    activation=object_activation_increment * object_prevalence / len(object_label_linguistic_multiword_parts),
+                    with_suppression=True)
 
             # Advance the model
             model.tick()
