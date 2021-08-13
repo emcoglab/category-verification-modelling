@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import List, Tuple, Dict, Optional
 
 from matplotlib import pyplot
+from numpy import nan
 from numpy.random import seed
 from scipy.stats import norm
 from pandas import read_csv, DataFrame
@@ -237,15 +238,13 @@ def correct_rate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame]
     model_false_alarm_rate = len(model_guesses[model_guesses["Model FA"]]) / len(model_guesses[model_guesses[ColNames.ShouldBeVerified] == False])
 
     # This is a simple Y/N task, not a 2AFC, so we can just use standard d-prime
-    if (model_hit_rate == 0) or (model_false_alarm_rate == 1):
-        # No hits, or all false alarms. dprime should be -inf, but let's call it -10 so we can see it
-        model_dprime = -10
-    elif (model_false_alarm_rate == 0) or (model_hit_rate == 1):
-        # No false alarms, or all hits, dprime should be info, but let's call it +10 so we can see it
-        model_dprime = 10
+    if (model_hit_rate == 0) or (model_false_alarm_rate == 1) or (model_false_alarm_rate == 0) or (model_hit_rate == 1):
+        # Can't compute a dprime or a criterion, so mark as missing
+        model_dprime = nan
+        model_criterion = nan
     else:
         model_dprime = zed(model_hit_rate) - zed(model_false_alarm_rate)
-    model_criterion = - (zed(model_hit_rate) + zed(model_false_alarm_rate)) / 2
+        model_criterion = - (zed(model_hit_rate) + zed(model_false_alarm_rate)) / 2
 
     results_dataframe = ground_truth_dataframe.merge(model_guesses,
                                                      how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
