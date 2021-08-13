@@ -188,8 +188,8 @@ def check_decision(decision: Decision, category_should_be_verified: bool) -> Tup
 
 def correct_rate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
                                 decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
-                                spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float]:
-    """Returns correct_rate and dprime."""
+                                spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
+    """Returns correct_rate and dprime and criterion."""
 
     zed = norm.ppf
 
@@ -245,6 +245,7 @@ def correct_rate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame]
         model_dprime = 10
     else:
         model_dprime = zed(model_hit_rate) - zed(model_false_alarm_rate)
+    model_criterion = - (zed(model_hit_rate) + zed(model_false_alarm_rate)) / 2
 
     results_dataframe = ground_truth_dataframe.merge(model_guesses,
                                                      how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
@@ -254,7 +255,7 @@ def correct_rate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame]
     with Path(save_dir, f"no{decision_threshold_no}_yes{decision_threshold_yes}.csv").open("w") as f:
         results_dataframe.to_csv(f, header=True, index=False)
 
-    return model_correct_rate, model_dprime
+    return model_correct_rate, model_dprime, model_criterion
 
 
 def save_heatmap(hitrates: DataFrame, path: Path, value_col: str, vlims: Tuple[Optional[float], Optional[float]]):
@@ -294,16 +295,19 @@ def main(spec: CategoryVerificationJobSpec):
 
     hitrates = []
     dprimes = []
+    criteria = []
     for decision_threshold_no in THRESHOLDS:
         for decision_threshold_yes in THRESHOLDS:
             if decision_threshold_no >= decision_threshold_yes:
                 continue
-            hitrate, dprime = correct_rate_for_thresholds(all_model_data=all_model_data,
-                                                          decision_threshold_yes=decision_threshold_yes,
-                                                          decision_threshold_no=decision_threshold_no,
-                                                          spec=spec, save_dir=Path(save_dir, "hitrates by threshold"))
+            hitrate, dprime, criterion = correct_rate_for_thresholds(
+                all_model_data=all_model_data,
+                decision_threshold_yes=decision_threshold_yes,
+                decision_threshold_no=decision_threshold_no,
+                spec=spec, save_dir=Path(save_dir, "hitrates by threshold"))
             hitrates.append((decision_threshold_no, decision_threshold_yes, hitrate))
             dprimes.append((decision_threshold_no, decision_threshold_yes, dprime))
+            criteria.append((decision_threshold_no, decision_threshold_yes, criterion))
 
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
@@ -312,6 +316,14 @@ def main(spec: CategoryVerificationJobSpec):
     with Path(save_dir, "dprimes overall.csv").open("w") as f:
         dprimes_df.to_csv(f, header=True, index=False)
     save_heatmap(dprimes_df, Path(save_dir, "dprimes overall.png"), value_col="d-prime", vlims=(None, None))
+
+    # Save overall criteria
+    criteria_df = DataFrame.from_records(
+        criteria,
+        columns=["Decision threshold (no)", "Decision threshold (yes)", "criteria"])
+    with Path(save_dir, "criteria overall.csv").open("w") as f:
+        criteria_df.to_csv(f, header=True, index=False)
+    save_heatmap(criteria_df, Path(save_dir, "criteria overall.png"), value_col="criteria", vlims=(None, None))
 
     logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
     logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10<t[2]<10)}")
