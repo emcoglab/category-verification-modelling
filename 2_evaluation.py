@@ -193,10 +193,10 @@ def correct_rate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame]
 
     zed = norm.ppf
 
-    ground_truth_dataframe = CV_ITEM_DATA.dataframe_balanced
+    ground_truth_dataframe = CV_ITEM_DATA.dataframe
 
     model_guesses = []
-    category_item_pairs: List[Tuple[str, str]] = CV_ITEM_DATA.category_object_pairs(balanced=True)
+    category_item_pairs: List[Tuple[str, str]] = CV_ITEM_DATA.category_object_pairs()
     for category_label, object_label in category_item_pairs:
         item_is_of_category: bool = CV_ITEM_DATA.is_correct(category_label, object_label)
 
@@ -273,7 +273,7 @@ def main(spec: CategoryVerificationJobSpec):
     logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
     # (object, item) -> model_data
     all_model_data: Dict[Tuple[str, str], DataFrame] = dict()
-    for category_label, object_label in CV_ITEM_DATA.category_object_pairs(balanced=True):
+    for category_label, object_label in CV_ITEM_DATA.category_object_pairs():
         model_output_path = Path(model_output_dir, "activation traces", f"{category_label}-{object_label} activation.csv")
         if not model_output_path.exists():
             # logger.warning(f"{model_output_path.name} not found.")
@@ -298,22 +298,16 @@ def main(spec: CategoryVerificationJobSpec):
             hitrates.append((decision_threshold_no, decision_threshold_yes, hitrate))
             dprimes.append((decision_threshold_no, decision_threshold_yes, dprime))
 
-    # Save overall hitrates
-    hitrates_df = DataFrame.from_records(
-        hitrates,
-        columns=["Decision threshold (no)", "Decision threshold (yes)", "Hitrate"])
-    with Path(save_dir, "hitrates overall balanced.csv").open("w") as f:
-        hitrates_df.to_csv(f, header=True, index=False)
-    save_heatmap(hitrates_df, Path(save_dir, "hitrates overall balanced.png"), value_col="Hitrate", vlims=(0, 1))
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
         dprimes,
         columns=["Decision threshold (no)", "Decision threshold (yes)", "d-prime"])
-    with Path(save_dir, "dprimes overall balanced.csv").open("w") as f:
+    with Path(save_dir, "dprimes overall.csv").open("w") as f:
         dprimes_df.to_csv(f, header=True, index=False)
-    save_heatmap(dprimes_df, Path(save_dir, "dprimes overall balanced.png"), value_col="d-prime", vlims=(None, None))
+    save_heatmap(dprimes_df, Path(save_dir, "dprimes overall.png"), value_col="d-prime", vlims=(None, None))
 
     logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
+    logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10<t[2]<10)}")
 
 
 if __name__ == '__main__':
