@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import sys
 from copy import deepcopy
-from enum import Enum
+from enum import Enum, auto
 from logging import getLogger, basicConfig, INFO
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
@@ -55,6 +55,53 @@ ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output
 CV_ITEM_DATA: CategoryVerificationItemData = CategoryVerificationItemData()
 THRESHOLDS = [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]  # linspace was causing weird float rounding errors
 
+
+class Outcome(Enum):
+    Hit = auto()
+    Miss = auto()
+    FalseAlarm = auto()
+    CorrectRejection = auto()
+
+    @property
+    def name(self) -> str:
+        if self == self.Hit:
+            return "HIT"
+        if self == self.Miss:
+            return "MISS"
+        if self == self.FalseAlarm:
+            return "FA"
+        if self == self.CorrectRejection:
+            return "CR"
+
+    @property
+    def is_correct(self) -> bool:
+        return self in {Outcome.Hit, Outcome.CorrectRejection}
+
+    @property
+    def answered_yes(self) -> bool:
+        return self in {Outcome.Hit, Outcome.FalseAlarm}
+
+    @classmethod
+    def from_yn(cls, decide_yes: bool, should_be_yes: bool) -> Outcome:
+
+        if should_be_yes:
+            if decide_yes:
+                return Outcome.Hit
+            else:
+                return Outcome.Miss
+        else:
+            if decide_yes:
+                return Outcome.FalseAlarm
+            else:
+                return Outcome.CorrectRejection
+
+    @classmethod
+    def from_decision(cls, decision: Decision, should_be_yes: bool) -> Outcome:
+        # When it's undecided or waiting, we default to no
+        if (decision == Decision.Undecided) or (decision == Decision.Waiting):
+            decision = Decision.No
+
+        return cls.from_yn(decide_yes=decision == Decision.Yes, should_be_yes=should_be_yes)
 
 class Decision(Enum):
     # Above yes
@@ -173,20 +220,6 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
     return Decision.Undecided, spec.run_for_ticks
 
 
-def check_decision(decision: Decision, category_should_be_verified: bool) -> Tuple[bool, bool, bool, bool]:
-    """Checks a Decision to see if it was correct. Returns True iff the decision is correct."""
-    # When it's undecided or waiting, we default to no
-    if (decision == Decision.Undecided) or (decision == Decision.Waiting):
-        decision = Decision.No
-
-    model_hit = category_should_be_verified and (decision == Decision.Yes)
-    model_miss = category_should_be_verified and (decision == Decision.No)
-    model_fa = (not category_should_be_verified) and (decision == Decision.Yes)
-    model_cr = (not category_should_be_verified) and (decision == Decision.No)
-
-    return model_hit, model_fa, model_cr, model_miss
-
-
 def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
                                exclude_repeated_items: bool,
                                decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
@@ -217,28 +250,26 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
                                                                     model_data,
                                                                     spec)
 
-        model_hit, model_fa, model_cr, model_miss = check_decision(model_decision, item_is_of_category)
+        model_outcome: Outcome = Outcome.from_decision(decision=model_decision, should_be_yes=item_is_of_category)
 
         model_guesses.append((
             category_label, object_label,
             item_is_of_category,
             model_decision, decision_made_at_time,
-            model_hit, model_fa, model_cr, model_miss,
-            model_hit or model_cr,
+            model_outcome.name, model_outcome.is_correct,
         ))
-    model_guesses = DataFrame.from_records(model_guesses, columns=[
+    model_guesses_df: DataFrame = DataFrame.from_records(model_guesses, columns=[
         ColNames.CategoryLabel, ColNames.ImageObject,
         ColNames.ShouldBeVerified,
         "Model decision", "Decision made at time",
-        "Model HIT", "Model FA", "Model CR", "Model MISS",
-        "Model is correct",
+        "Model outcome", "Model is correct",
     ])
 
     # Rates computed as proportion of all trials, not all trials on which the model can decide
     n_trials = len(category_item_pairs)
-    model_correct_rate = len(model_guesses[model_guesses["Model is correct"]]) / n_trials
-    model_hit_rate = len(model_guesses[model_guesses["Model HIT"]]) / len(model_guesses[model_guesses[ColNames.ShouldBeVerified] == True])
-    model_false_alarm_rate = len(model_guesses[model_guesses["Model FA"]]) / len(model_guesses[model_guesses[ColNames.ShouldBeVerified] == False])
+    model_correct_rate = len(model_guesses_df[model_guesses_df["Model is correct"]]) / n_trials
+    model_hit_rate = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.Hit.name]) / len(model_guesses_df[model_guesses_df[ColNames.ShouldBeVerified] == True])
+    model_false_alarm_rate = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.FalseAlarm.name]) / len(model_guesses_df[model_guesses_df[ColNames.ShouldBeVerified] == False])
 
     # This is a simple Y/N task, not a 2AFC, so we can just use standard d-prime
     if (model_hit_rate == 0) or (model_false_alarm_rate == 1) or (model_false_alarm_rate == 0) or (model_hit_rate == 1):
@@ -249,8 +280,11 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
         model_dprime = zed(model_hit_rate) - zed(model_false_alarm_rate)
         model_criterion = - (zed(model_hit_rate) + zed(model_false_alarm_rate)) / 2
 
-    results_dataframe = ground_truth_dataframe.merge(model_guesses,
+    results_dataframe = ground_truth_dataframe.merge(model_guesses_df,
                                                      how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
+
+    # Format columns
+    results_dataframe["Decision made at time"] = results_dataframe["Decision made at time"].astype('Int64')
 
     # Save individual threshold data for verification
     save_dir.mkdir(parents=True, exist_ok=True)
