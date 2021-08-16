@@ -149,9 +149,9 @@ class _Decider:
         return decisions
 
 
-def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, cv_item_data, model_data, spec) -> Tuple[Decision, int]:
-    object_label_sensorimotor: str = apply_substitution_if_available(object_label, cv_item_data.substitutions_sensorimotor)
-    object_label_linguistic: str = apply_substitution_if_available(object_label, cv_item_data.substitutions_linguistic)
+def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int]:
+    object_label_sensorimotor: str = apply_substitution_if_available(object_label, CV_ITEM_DATA.substitutions_sensorimotor)
+    object_label_linguistic: str = apply_substitution_if_available(object_label, CV_ITEM_DATA.substitutions_linguistic)
     object_label_linguistic_multiword_parts: List[str] = decompose_multiword(object_label_linguistic)
     sensorimotor_decider = _Decider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
     linguistic_deciders = [
@@ -187,9 +187,9 @@ def check_decision(decision: Decision, category_should_be_verified: bool) -> Tup
     return model_hit, model_fa, model_cr, model_miss
 
 
-def correct_rate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
-                                decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
-                                spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
+def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
+                               decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
+                               spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
     """Returns correct_rate and dprime and criterion."""
 
     zed = norm.ppf
@@ -201,16 +201,16 @@ def correct_rate_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame]
     for category_label, object_label in category_item_pairs:
         item_is_of_category: bool = CV_ITEM_DATA.is_correct(category_label, object_label)
 
-        model_decision: Decision
-        decision_made_at_time: int
         try:
             model_data = all_model_data[(category_label, object_label)]
         # No model output was saved
         except KeyError:
             continue
+
+        model_decision: Decision
+        decision_made_at_time: int
         model_decision, decision_made_at_time = make_model_decision(object_label,
                                                                     decision_threshold_no, decision_threshold_yes,
-                                                                    CV_ITEM_DATA,
                                                                     model_data,
                                                                     spec)
 
@@ -299,7 +299,7 @@ def main(spec: CategoryVerificationJobSpec):
         for decision_threshold_yes in THRESHOLDS:
             if decision_threshold_no >= decision_threshold_yes:
                 continue
-            hitrate, dprime, criterion = correct_rate_for_thresholds(
+            hitrate, dprime, criterion = performance_for_thresholds(
                 all_model_data=all_model_data,
                 decision_threshold_yes=decision_threshold_yes,
                 decision_threshold_no=decision_threshold_no,
