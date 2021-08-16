@@ -188,6 +188,7 @@ def check_decision(decision: Decision, category_should_be_verified: bool) -> Tup
 
 
 def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
+                               exclude_repeated_items: bool,
                                decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
                                spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
     """Returns correct_rate and dprime and criterion."""
@@ -205,6 +206,8 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
             model_data = all_model_data[(category_label, object_label)]
         # No model output was saved
         except KeyError:
+            continue
+        if exclude_repeated_items and is_repeated_item(category_label, object_label):
             continue
 
         model_decision: Decision
@@ -269,7 +272,30 @@ def save_heatmap(hitrates: DataFrame, path: Path, value_col: str, vlims: Tuple[O
     pyplot.close(ax.figure)
 
 
-def main(spec: CategoryVerificationJobSpec):
+def is_repeated_item(category_label: str, object_label: str) -> bool:
+
+    # Use the same decomposition/translation logic as elsewhere
+    # TODO: this should be refactored into one place!
+    category_label_linguistic: str = apply_substitution_if_available(category_label, CV_ITEM_DATA.substitutions_linguistic)
+    category_label_sensorimotor: str = apply_substitution_if_available(category_label, CV_ITEM_DATA.substitutions_sensorimotor)
+    object_label_linguistic: str = apply_substitution_if_available(object_label, CV_ITEM_DATA.substitutions_linguistic)
+    object_label_sensorimotor: str = apply_substitution_if_available(object_label, CV_ITEM_DATA.substitutions_sensorimotor)
+    category_label_linguistic_multiword_parts: List[str] = decompose_multiword(category_label_linguistic)
+    object_label_linguistic_multiword_parts: List[str] = decompose_multiword(object_label_linguistic)
+
+    all_category_words = set(category_label_linguistic_multiword_parts) | {category_label_sensorimotor}
+    all_object_words = set(object_label_linguistic_multiword_parts) | {object_label_sensorimotor}
+
+    # Repeated item if there's any word in common between category and object in either component
+    return len(all_category_words.intersection(all_object_words)) > 0
+
+
+def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool):
+    """
+    :param: exclude_repeated_items:
+        If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
+        (CUP - paper cup), the items are excluded from further analysis.
+    """
 
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
     save_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative(), " evaluation")
@@ -277,6 +303,7 @@ def main(spec: CategoryVerificationJobSpec):
 
     # Only load the model data once, then just reference it for each hitrate.
     # TODO: This is turning into spaghetti code, but let's get it working first.
+    #       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
     # (object, item) -> model_data
     all_model_data: Dict[Tuple[str, str], DataFrame] = dict()
@@ -301,6 +328,7 @@ def main(spec: CategoryVerificationJobSpec):
                 continue
             hitrate, dprime, criterion = performance_for_thresholds(
                 all_model_data=all_model_data,
+                exclude_repeated_items=exclude_repeated_items,
                 decision_threshold_yes=decision_threshold_yes,
                 decision_threshold_no=decision_threshold_no,
                 spec=spec, save_dir=Path(save_dir, "hitrates by threshold"))
@@ -308,21 +336,23 @@ def main(spec: CategoryVerificationJobSpec):
             dprimes.append((decision_threshold_no, decision_threshold_yes, dprime))
             criteria.append((decision_threshold_no, decision_threshold_yes, criterion))
 
+    filename_suffix = 'excluding repeated_items' if exclude_repeated_items else 'overall'
+
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
         dprimes,
         columns=["Decision threshold (no)", "Decision threshold (yes)", "d-prime"])
-    with Path(save_dir, "dprimes overall.csv").open("w") as f:
+    with Path(save_dir, f"dprimes {filename_suffix}.csv").open("w") as f:
         dprimes_df.to_csv(f, header=True, index=False)
-    save_heatmap(dprimes_df, Path(save_dir, "dprimes overall.png"), value_col="d-prime", vlims=(None, None))
+    save_heatmap(dprimes_df, Path(save_dir, f"dprimes {filename_suffix}.png"), value_col="d-prime", vlims=(None, None))
 
     # Save overall criteria
     criteria_df = DataFrame.from_records(
         criteria,
         columns=["Decision threshold (no)", "Decision threshold (yes)", "criteria"])
-    with Path(save_dir, "criteria overall.csv").open("w") as f:
+    with Path(save_dir, f"criteria {'excluding repeated_items' if exclude_repeated_items else 'overall'}.csv").open("w") as f:
         criteria_df.to_csv(f, header=True, index=False)
-    save_heatmap(criteria_df, Path(save_dir, "criteria overall.png"), value_col="criteria", vlims=(None, None))
+    save_heatmap(criteria_df, Path(save_dir, f"criteria {filename_suffix}.png"), value_col="criteria", vlims=(None, None))
 
     logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
     logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10<t[2]<10)}")
@@ -354,6 +384,6 @@ if __name__ == '__main__':
 
     for i1, spec in enumerate(specs, start=1):
         logger.info(f"Evaluating model {i1} of {len(specs)}")
-        main(spec=spec)
+        main(spec=spec, exclude_repeated_items=True)
 
     logger.info("Done!")
