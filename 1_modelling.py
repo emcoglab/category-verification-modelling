@@ -53,7 +53,8 @@ from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUIS
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
 from framework.utils import decompose_multiword
 
-_sn = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
+# Shared
+_SN = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
 
 
 def _get_best_sensorimotor_translation(sensorimotor_component: SensorimotorComponent, w: str) -> Optional[str]:
@@ -190,7 +191,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
         object_prevalence: float
         try:
             object_prevalence = scale_prevalence_01(
-                prevalence_from_fraction_known(_sn.fraction_known(object_label_sensorimotor)))
+                prevalence_from_fraction_known(_SN.fraction_known(object_label_sensorimotor)))
         except WordNotInNormsError:
             # In case the word isn't in the norms, make that known, but fall back to full prevalence
             object_prevalence = 1.0
@@ -213,9 +214,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
         activation_tracking_data = []
         buffer_entries = []
         back_out: bool = False  # Yes, this is ugly and fragile, but since Python doesn't have named loops I can't find a more readable way to do it.
-        while True:
-            if model.clock > job_spec.run_for_ticks:
-                break
+        while model.clock <= job_spec.run_for_ticks:
 
             # Apply incremental activation during the immediate post-SOA period in both components
             # We won't do this on the first tick, but we do want to check and make sure that it won't fail in advance
@@ -282,6 +281,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
 
         with buffer_entries_path.open("w") as file:
             DataFrame(buffer_entries).to_csv(file, index=False)
+
+    Path(response_dir, " MODEL RUN COMPLETE").touch()
 
 
 if __name__ == '__main__':

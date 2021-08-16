@@ -42,8 +42,8 @@ class Job_1(CategoryVerificationJob):
     @property
     def _ram_requirement_g(self):
         assert isinstance(self.spec, CategoryVerificationJobSpec)
-        return self.SM_RAM(self.spec.sensorimotor_spec.max_radius) \
-               + self.LING_RAM[self.spec.linguistic_spec.model_name][self.spec.linguistic_spec.n_words]
+        return (self.SM_RAM(self.spec.sensorimotor_spec.max_radius)
+                + self.LING_RAM[self.spec.linguistic_spec.model_name][self.spec.linguistic_spec.n_words])
 
 
 if __name__ == '__main__':
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(
-            Path(Path(__file__).parent, "job_specifications/2021-07-15 40k different decay.yaml")):
+            Path(Path(__file__).parent, "job_specifications/2021-08-16 educated guesses.yaml")):
         for cca in ccas:
             spec = deepcopy(s)
             spec.cross_component_attenuation = cca
