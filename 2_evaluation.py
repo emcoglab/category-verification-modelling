@@ -370,23 +370,23 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool):
             dprimes.append((decision_threshold_no, decision_threshold_yes, dprime))
             criteria.append((decision_threshold_no, decision_threshold_yes, criterion))
 
-    filename_suffix = 'excluding repeated_items' if exclude_repeated_items else 'overall'
+    filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
 
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
         dprimes,
         columns=["Decision threshold (no)", "Decision threshold (yes)", "d-prime"])
-    with Path(save_dir, f"dprimes {filename_suffix}.csv").open("w") as f:
+    with Path(save_dir, f"{filename_prefix} dprimes.csv").open("w") as f:
         dprimes_df.to_csv(f, header=True, index=False)
-    save_heatmap(dprimes_df, Path(save_dir, f"dprimes {filename_suffix}.png"), value_col="d-prime", vlims=(None, None))
+    save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes.png"), value_col="d-prime", vlims=(None, None))
 
     # Save overall criteria
     criteria_df = DataFrame.from_records(
         criteria,
         columns=["Decision threshold (no)", "Decision threshold (yes)", "criteria"])
-    with Path(save_dir, f"criteria {'excluding repeated_items' if exclude_repeated_items else 'overall'}.csv").open("w") as f:
+    with Path(save_dir, f"{filename_prefix} criteria.csv").open("w") as f:
         criteria_df.to_csv(f, header=True, index=False)
-    save_heatmap(criteria_df, Path(save_dir, f"criteria {filename_suffix}.png"), value_col="criteria", vlims=(None, None))
+    save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col="criteria", vlims=(None, None))
 
     logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
     logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10<t[2]<10)}")
