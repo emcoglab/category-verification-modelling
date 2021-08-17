@@ -149,7 +149,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
     model.mapping.save_to(directory=response_dir)
 
     # Make all activation after SOA to be non-propagating
-    _pre_soa: Guard = lambda idx, activation: model.clock < job_spec.soa_ticks
+    t = model.clock  # This guard will be executed part-way-through a tick, when model.clock will be in an inconsistent state. So freeze it here first.
+    _pre_soa: Guard = lambda idx, activation: t < job_spec.soa_ticks
     model.linguistic_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
     model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
 
