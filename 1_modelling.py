@@ -30,6 +30,7 @@ from framework.cognitive_model.basic_types import ActivationValue, Length, Compo
 from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.events import ItemEnteredBufferEvent
+from framework.cognitive_model.graph_propagator import Guard
 from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_components import LinguisticComponent
 from framework.cognitive_model.preferences.preferences import Preferences
@@ -147,23 +148,26 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
     job_spec.save(in_location=response_dir)
     model.mapping.save_to(directory=response_dir)
 
+    # Make all activation after SOA to be non-propagating
+    _pre_soa: Guard = lambda idx, activation: model.clock < job_spec.soa_ticks
+    model.linguistic_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
+    model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
+
     # Stimuli are the same for both datasets so it doesn't matter which we use here
     cv_item_data = CategoryVerificationItemData()
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
 
-    def _activate_sensorimotor_item(label, activation, with_suppression):
+    def _activate_sensorimotor_item(label, activation):
         """Handles activation of sensorimotor item with translation if necessary."""
         if label in model.sensorimotor_component.available_labels:
-            model.sensorimotor_component.propagator.activate_item_with_label(label, activation,
-                                                                             with_suppression=with_suppression)
+            model.sensorimotor_component.propagator.activate_item_with_label(label, activation)
         else:
             logger.warning(f"Missing sensorimotor item: {label}")
             translation = _get_best_sensorimotor_translation(model.sensorimotor_component, label)
             if translation is not None:
                 logger.warning(f" Attempting with translation: {translation}")
-                model.sensorimotor_component.propagator.activate_item_with_label(translation, activation,
-                                                                                 with_suppression=with_suppression)
+                model.sensorimotor_component.propagator.activate_item_with_label(translation, activation)
             else:
                 logger.error(f" No translations available")
 
@@ -228,14 +232,12 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
                 # Activate sensorimotor item directly
                 _activate_sensorimotor_item(
                     label=object_label_sensorimotor,
-                    activation=object_activation_increment,
-                    with_suppression=True)
+                    activation=object_activation_increment)
                 # Activate linguistic items separately
                 model.linguistic_component.propagator.activate_items_with_labels(
                     labels=object_label_linguistic_multiword_parts,
                     # Attenuate linguistic activation by object label prevalence
-                    activation=object_activation_increment * object_prevalence / len(object_label_linguistic_multiword_parts),
-                    with_suppression=True)
+                    activation=object_activation_increment * object_prevalence / len(object_label_linguistic_multiword_parts))
 
             # Advance the model
             tick_events = model.tick()
