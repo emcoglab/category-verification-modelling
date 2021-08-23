@@ -61,6 +61,6 @@ if __name__ == '__main__':
             jobs.append(Job_1(spec))
 
     for job in jobs:
-        job.run_locally(extra_arguments=["--sensorimotor_use_prepruned"])
+        job.run_locally()
 
     print(f"Submitted {len(jobs)} jobs.")

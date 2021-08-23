@@ -115,7 +115,7 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
     }
 
 
-def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
+def main(job_spec: CategoryVerificationJobSpec):
 
     # Validate spec
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
@@ -132,9 +132,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
 
     # Set up model
     model = InteractiveCombinedCognitiveModel(
-        sensorimotor_component=(job_spec.sensorimotor_spec.to_component_prepruned(SensorimotorComponent)
-                                if use_prepruned
-                                else job_spec.sensorimotor_spec.to_component(SensorimotorComponent)),
+        sensorimotor_component=job_spec.sensorimotor_spec.to_component(SensorimotorComponent),
         linguistic_component=job_spec.linguistic_spec.to_component(LinguisticComponent),
         lc_to_smc_delay=job_spec.lc_to_smc_delay,
         smc_to_lc_delay=job_spec.smc_to_lc_delay,
@@ -306,7 +304,6 @@ if __name__ == '__main__':
     parser.add_argument("--sensorimotor_node_decay_median", required=True, type=float)
     parser.add_argument("--sensorimotor_node_decay_sigma", required=True, type=float)
     parser.add_argument("--sensorimotor_max_sphere_radius", required=True, type=float)
-    parser.add_argument("--sensorimotor_use_prepruned", action="store_true")
     parser.add_argument("--sensorimotor_attenuation", required=True, type=str, choices=[n.name for n in AttenuationStatistic])
     # We have to add this argument to make the interface compatible, but we always use the BrEng translation
     parser.add_argument("--sensorimotor_use_breng_translation", action="store_true")
@@ -379,7 +376,6 @@ if __name__ == '__main__':
             object_activation=args.object_activation,
             incremental_activation_duration=args.object_activation_duration,
         ),
-        use_prepruned=args.sensorimotor_use_prepruned,
     )
 
     logger.info("Done!")
