@@ -123,7 +123,7 @@ def main(job_spec: CategoryVerificationJobSpec):
     # Set up output directories
     response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
     if not response_dir.is_dir():
-        logger.warning(f"{response_dir} directory does not exist; making it.")
+        logger.info(f"{response_dir} directory does not exist; making it.")
         response_dir.mkdir(parents=True)
     activation_tracking_dir = Path(response_dir, "activation traces")
     buffer_entries_dir = Path(response_dir, "buffer entries")
@@ -171,6 +171,8 @@ def main(job_spec: CategoryVerificationJobSpec):
                 logger.error(f" No translations available")
 
     for category_label, object_label in cv_item_data.category_object_pairs():
+
+        logger.info(f"Running model on {category_label} -> {object_label}")
 
         activation_tracking_path = Path(activation_tracking_dir, f"{category_label}-{object_label} activation.csv")
         buffer_entries_path = Path(buffer_entries_dir, f"{category_label}-{object_label} buffer.csv")
