@@ -263,7 +263,7 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
             use_activation_cap      =bool(dictionary["Use activation cap"]) if "Use activation cap" in dictionary else False,
         )
 
-    def _to_component(self, component_class, use_prepruned: bool) -> SensorimotorComponent:
+    def to_component(self, component_class) -> SensorimotorComponent:
         return component_class(
             propagator=SensorimotorPropagator(
                 distance_type=self.distance_type,
@@ -271,7 +271,6 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
                 max_sphere_radius=self.max_radius,
                 node_decay_lognormal_median=self.node_decay_median,
                 node_decay_lognormal_sigma=self.node_decay_sigma,
-                use_prepruned=use_prepruned,
                 use_breng_translation=self.use_breng_translation,
                 shelf_life=self.run_for_ticks,
             ),
@@ -281,12 +280,6 @@ class SensorimotorPropagationJobSpec(PropagationJobSpec):
             activation_cap=FULL_ACTIVATION if self.use_activation_cap else None,
             use_breng_translation=self.use_breng_translation,
         )
-
-    def to_component(self, component_class):
-        return self._to_component(component_class, False)
-
-    def to_component_prepruned(self, component_class):
-        return self._to_component(component_class, True)
 
 
 @dataclass
@@ -352,7 +345,7 @@ class BufferedSensorimotorPropagationJobSpec(SensorimotorPropagationJobSpec):
             use_activation_cap      =bool(dictionary["Use activation cap"]) if "Use activation cap" in dictionary else False,
         )
 
-    def _to_component(self, component_class, use_prepruned: bool) -> BufferedSensorimotorComponent:
+    def to_component(self, component_class) -> BufferedSensorimotorComponent:
         return component_class(
             propagator=SensorimotorPropagator(
                 distance_type=self.distance_type,
@@ -360,7 +353,6 @@ class BufferedSensorimotorPropagationJobSpec(SensorimotorPropagationJobSpec):
                 max_sphere_radius=self.max_radius,
                 node_decay_lognormal_median=self.node_decay_median,
                 node_decay_lognormal_sigma=self.node_decay_sigma,
-                use_prepruned=use_prepruned,
                 use_breng_translation=self.use_breng_translation,
             ),
             accessible_set_threshold=self.accessible_set_threshold,

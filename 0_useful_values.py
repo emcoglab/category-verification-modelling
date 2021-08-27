@@ -41,7 +41,6 @@ def pairwise_lengths(linguistic_length_factor: int, linguistic_words: int, senso
         max_sphere_radius=1.5,
         node_decay_lognormal_median=1,  # junk
         node_decay_lognormal_sigma=1,  # junk
-        use_prepruned=True,
         use_breng_translation=True,
     )
 

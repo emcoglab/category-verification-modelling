@@ -123,7 +123,7 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
     }
 
 
-def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
+def main(job_spec: CategoryVerificationJobSpec):
 
     # Validate spec
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
@@ -131,7 +131,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
     # Set up output directories
     response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
     if not response_dir.is_dir():
-        logger.warning(f"{response_dir} directory does not exist; making it.")
+        logger.info(f"{response_dir} directory does not exist; making it.")
         response_dir.mkdir(parents=True)
     activation_tracking_dir = Path(response_dir, "activation traces")
     buffer_entries_dir = Path(response_dir, "buffer entries")
@@ -140,9 +140,7 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
 
     # Set up model
     model = InteractiveCombinedCognitiveModel(
-        sensorimotor_component=(job_spec.sensorimotor_spec.to_component_prepruned(SensorimotorComponent)
-                                if use_prepruned
-                                else job_spec.sensorimotor_spec.to_component(SensorimotorComponent)),
+        sensorimotor_component=job_spec.sensorimotor_spec.to_component(SensorimotorComponent),
         linguistic_component=job_spec.linguistic_spec.to_component(LinguisticComponent),
         lc_to_smc_delay=job_spec.lc_to_smc_delay,
         smc_to_lc_delay=job_spec.smc_to_lc_delay,
@@ -181,6 +179,8 @@ def main(job_spec: CategoryVerificationJobSpec, use_prepruned: bool):
                 logger.error(f" No translations available")
 
     for category_label, object_label in cv_item_data.category_object_pairs():
+
+        logger.info(f"Running model on {category_label} -> {object_label}")
 
         activation_tracking_path = Path(activation_tracking_dir, f"{category_label}-{object_label} activation.csv")
         buffer_entries_path = Path(buffer_entries_dir, f"{category_label}-{object_label} buffer.csv")
@@ -314,7 +314,6 @@ if __name__ == '__main__':
     parser.add_argument("--sensorimotor_node_decay_median", required=True, type=float)
     parser.add_argument("--sensorimotor_node_decay_sigma", required=True, type=float)
     parser.add_argument("--sensorimotor_max_sphere_radius", required=True, type=float)
-    parser.add_argument("--sensorimotor_use_prepruned", action="store_true")
     parser.add_argument("--sensorimotor_attenuation", required=True, type=str, choices=[n.name for n in AttenuationStatistic])
     # We have to add this argument to make the interface compatible, but we always use the BrEng translation
     parser.add_argument("--sensorimotor_use_breng_translation", action="store_true")
@@ -387,7 +386,6 @@ if __name__ == '__main__':
             object_activation=args.object_activation,
             incremental_activation_duration=args.object_activation_duration,
         ),
-        use_prepruned=args.sensorimotor_use_prepruned,
     )
 
     logger.info("Done!")
