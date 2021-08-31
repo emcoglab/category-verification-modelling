@@ -35,6 +35,8 @@ from seaborn import heatmap
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
 from framework.cognitive_model.components import FULL_ACTIVATION
+from framework.cognitive_model.ldm.utils.logging import print_progress
+from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available, \
     ColNames
 from framework.evaluation.column_names import CLOCK, OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
@@ -287,7 +289,7 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
     results_dataframe["Decision made at time"] = results_dataframe["Decision made at time"].astype('Int64')
 
     # Save individual threshold data for verification
-    save_dir.mkdir(parents=True, exist_ok=True)
+    save_dir.mkdir(parents=False, exist_ok=True)
     with Path(save_dir, f"no{decision_threshold_no}_yes{decision_threshold_yes}.csv").open("w") as f:
         results_dataframe.to_csv(f, header=True, index=False)
 
@@ -332,8 +334,14 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool):
     """
 
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
-    save_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative(), " evaluation")
-    save_dir.mkdir(parents=True, exist_ok=True)
+    if not model_output_dir.exists():
+        logger.warning(f"Model out put not found for v{VERSION} in directory {model_output_dir.as_posix()}")
+        return
+    if not Path(model_output_dir, " MODEL RUN COMPLETE").exists():
+        logger.info(f"Incomplete model run found in {model_output_dir.as_posix()}")
+        return
+    save_dir = Path(model_output_dir, " evaluation")
+    save_dir.mkdir(parents=False, exist_ok=True)
 
     # Only load the model data once, then just reference it for each hitrate.
     # TODO: This is turning into spaghetti code, but let's get it working first.
@@ -356,10 +364,13 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool):
     hitrates = []
     dprimes = []
     criteria = []
+    threshold_i = 0
     for decision_threshold_no in THRESHOLDS:
         for decision_threshold_yes in THRESHOLDS:
             if decision_threshold_no >= decision_threshold_yes:
                 continue
+            threshold_i += 1
+
             hitrate, dprime, criterion = performance_for_thresholds(
                 all_model_data=all_model_data,
                 exclude_repeated_items=exclude_repeated_items,
@@ -369,6 +380,8 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool):
             hitrates.append((decision_threshold_no, decision_threshold_yes, hitrate))
             dprimes.append((decision_threshold_no, decision_threshold_yes, dprime))
             criteria.append((decision_threshold_no, decision_threshold_yes, criterion))
+
+            print_progress(threshold_i, len(THRESHOLDS) * (len(THRESHOLDS) - 1) / 2, prefix="Running Yes/No thresholds: ", bar_length=50)
 
     filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
 
@@ -389,7 +402,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool):
     save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col="criteria", vlims=(None, None))
 
     logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
-    logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10<t[2]<10)}")
+    logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10 < t[2] < 10)}")
 
 
 if __name__ == '__main__':
