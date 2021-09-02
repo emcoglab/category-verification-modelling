@@ -326,7 +326,7 @@ def is_repeated_item(category_label: str, object_label: str) -> bool:
     return len(all_category_words.intersection(all_object_words)) > 0
 
 
-def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool):
+def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
         If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
@@ -341,6 +341,9 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool):
         logger.info(f"Incomplete model run found in {model_output_dir.as_posix()}")
         return
     save_dir = Path(model_output_dir, " evaluation")
+    if save_dir.exists() and not overwrite:
+        logger.info(f"Evaluation complete for {save_dir.as_posix()}")
+        return
     save_dir.mkdir(parents=False, exist_ok=True)
 
     # Only load the model data once, then just reference it for each hitrate.
@@ -434,6 +437,8 @@ if __name__ == '__main__':
 
     for i1, spec in enumerate(specs, start=1):
         logger.info(f"Evaluating model {i1} of {len(specs)}")
-        main(spec=spec, exclude_repeated_items=True)
+        main(spec=spec,
+             exclude_repeated_items=True,
+             overwrite=False)
 
     logger.info("Done!")
