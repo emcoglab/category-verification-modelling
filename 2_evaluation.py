@@ -38,7 +38,7 @@ from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available, \
-    ColNames
+    ColNames, CategoryVerificationParticipantOriginal
 from framework.evaluation.column_names import CLOCK, OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.utils import decompose_multiword
 
@@ -54,7 +54,8 @@ ARG_DATASET_TEST  = "test"
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
 
 # Shared
-CV_ITEM_DATA: CategoryVerificationItemData = CategoryVerificationItemData()
+CV_SUBJECT_DATA: CategoryVerificationParticipantOriginal = CategoryVerificationParticipantOriginal()
+CV_ITEM_DATA: CategoryVerificationItemData = CV_SUBJECT_DATA.item_data
 THRESHOLDS = [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]  # linspace was causing weird float rounding errors
 
 
@@ -391,18 +392,23 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, overwr
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
         dprimes,
-        columns=["Decision threshold (no)", "Decision threshold (yes)", "d-prime"])
+        columns=["Decision threshold (no)", "Decision threshold (yes)", ColNames.DPrime])
     with Path(save_dir, f"{filename_prefix} dprimes.csv").open("w") as f:
         dprimes_df.to_csv(f, header=True, index=False)
-    save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes.png"), value_col="d-prime", vlims=(None, None))
+    dprimes_df[f"{ColNames.DPrime} absolute difference"] = abs(CV_SUBJECT_DATA.summary_dataframe[ColNames.DPrime].mean() - dprimes_df[ColNames.DPrime])
+    save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes.png"), value_col=ColNames.DPrime, vlims=(None, None))
+    save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes difference.png"), value_col=f"{ColNames.DPrime} absolute difference", vlims=(0, None))
 
     # Save overall criteria
     criteria_df = DataFrame.from_records(
         criteria,
-        columns=["Decision threshold (no)", "Decision threshold (yes)", "criteria"])
+        columns=["Decision threshold (no)", "Decision threshold (yes)", ColNames.Criterion])
     with Path(save_dir, f"{filename_prefix} criteria.csv").open("w") as f:
         criteria_df.to_csv(f, header=True, index=False)
-    save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col="criteria", vlims=(None, None))
+    # Difference to subject-average criterion
+    criteria_df[f"{ColNames.Criterion} absolute difference"] = abs(CV_SUBJECT_DATA.summary_dataframe[ColNames.Criterion].mean() - criteria_df[ColNames.Criterion])
+    save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col=ColNames.Criterion, vlims=(None, None))
+    save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria difference.png"), value_col=f"{ColNames.Criterion} absolute difference", vlims=(0, None))
 
     logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
     logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10 < t[2] < 10)}")
