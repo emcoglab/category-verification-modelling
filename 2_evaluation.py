@@ -100,9 +100,10 @@ class Outcome(Enum):
 
     @classmethod
     def from_decision(cls, decision: Decision, should_be_yes: bool) -> Outcome:
-        # When it's undecided or waiting, we default to no
+        # When it's undecided or waiting, we default to no.
         if (decision == Decision.Undecided) or (decision == Decision.Waiting):
             decision = Decision.No
+        # This currently has no effect on what is returned by this function as we only care about yesses
 
         return cls.from_yn(decide_yes=decision == Decision.Yes, should_be_yes=should_be_yes)
 
@@ -224,6 +225,7 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
 
 
 def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
+                               restrict_to_answerable_items: bool,
                                exclude_repeated_items: bool,
                                decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
                                spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
@@ -268,11 +270,37 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
         "Model outcome", "Model is correct",
     ])
 
-    # Rates computed as proportion of all trials, not all trials on which the model can decide
-    n_trials = len(category_item_pairs)
-    model_correct_rate = len(model_guesses_df[model_guesses_df["Model is correct"]]) / n_trials
-    model_hit_rate = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.Hit.name]) / len(model_guesses_df[model_guesses_df[ColNames.ShouldBeVerified] == True])
-    model_false_alarm_rate = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.FalseAlarm.name]) / len(model_guesses_df[model_guesses_df[ColNames.ShouldBeVerified] == False])
+    # Format columns
+    model_guesses_df["Decision made at time"] = model_guesses_df["Decision made at time"].astype('Int64')
+
+    results_dataframe = ground_truth_dataframe.merge(model_guesses_df[[
+        ColNames.CategoryLabel, ColNames.ImageObject,
+        # Exclude ColNames.ShouldBeVerified so we don't get duplicated columns on the merge
+        "Model decision", "Decision made at time",
+        "Model outcome", "Model is correct",
+    ]], how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
+
+    # Save individual threshold data for verification
+    save_dir.mkdir(parents=False, exist_ok=True)
+    with Path(save_dir, f"no{decision_threshold_no}_yes{decision_threshold_yes}.csv").open("w") as f:
+        results_dataframe.to_csv(f, header=True, index=False)
+
+    model_hit_count = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.Hit.name])
+    model_fa_count = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.FalseAlarm.name])
+    model_correct_count = len(model_guesses_df[model_guesses_df["Model is correct"] == True])
+
+    if restrict_to_answerable_items:
+        # Rates computed as a proportion of trials on which the model can decide
+        n_trials_signal = len(model_guesses_df[model_guesses_df[ColNames.ShouldBeVerified] == True])
+        n_trials_noise = len(model_guesses_df[model_guesses_df[ColNames.ShouldBeVerified] == False])
+    else:
+        # Rates computed as proportion of ALL trials, not all trials on which the model can decide
+        n_trials_signal = len(results_dataframe[results_dataframe[ColNames.ShouldBeVerified] == True])
+        n_trials_noise = len(results_dataframe[results_dataframe[ColNames.ShouldBeVerified] == False])
+
+    model_hit_rate = model_hit_count / n_trials_signal
+    model_false_alarm_rate = model_fa_count / n_trials_noise
+    model_correct_rate = model_correct_count / n_trials_signal + n_trials_noise
 
     # This is a simple Y/N task, not a 2AFC, so we can just use standard d-prime
     if (model_hit_rate == 0) or (model_false_alarm_rate == 1) or (model_false_alarm_rate == 0) or (model_hit_rate == 1):
@@ -282,17 +310,6 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
     else:
         model_dprime = zed(model_hit_rate) - zed(model_false_alarm_rate)
         model_criterion = - (zed(model_hit_rate) + zed(model_false_alarm_rate)) / 2
-
-    results_dataframe = ground_truth_dataframe.merge(model_guesses_df,
-                                                     how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
-
-    # Format columns
-    results_dataframe["Decision made at time"] = results_dataframe["Decision made at time"].astype('Int64')
-
-    # Save individual threshold data for verification
-    save_dir.mkdir(parents=False, exist_ok=True)
-    with Path(save_dir, f"no{decision_threshold_no}_yes{decision_threshold_yes}.csv").open("w") as f:
-        results_dataframe.to_csv(f, header=True, index=False)
 
     return model_correct_rate, model_dprime, model_criterion
 
@@ -327,7 +344,7 @@ def is_repeated_item(category_label: str, object_label: str) -> bool:
     return len(all_category_words.intersection(all_object_words)) > 0
 
 
-def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, overwrite: bool):
+def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restrict_to_answerable_items: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
         If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
@@ -336,7 +353,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, overwr
 
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
     if not model_output_dir.exists():
-        logger.warning(f"Model out put not found for v{VERSION} in directory {model_output_dir.as_posix()}")
+        logger.warning(f"Model output not found for v{VERSION} in directory {model_output_dir.as_posix()}")
         return
     if not Path(model_output_dir, " MODEL RUN COMPLETE").exists():
         logger.info(f"Incomplete model run found in {model_output_dir.as_posix()}")
@@ -377,6 +394,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, overwr
 
             hitrate, dprime, criterion = performance_for_thresholds(
                 all_model_data=all_model_data,
+                restrict_to_answerable_items=restrict_to_answerable_items,
                 exclude_repeated_items=exclude_repeated_items,
                 decision_threshold_yes=decision_threshold_yes,
                 decision_threshold_no=decision_threshold_no,
@@ -445,6 +463,7 @@ if __name__ == '__main__':
         logger.info(f"Evaluating model {i1} of {len(specs)}")
         main(spec=spec,
              exclude_repeated_items=True,
+             restrict_to_answerable_items=True,
              overwrite=False)
 
     logger.info("Done!")
