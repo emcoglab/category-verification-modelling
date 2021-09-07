@@ -76,7 +76,7 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
         _logger.warning(f"No model data in {model_output_dir.as_posix()}")
         return
 
-    fig, ((ax_hit, ax_miss), (ax_fa, ax_cr)) = pyplot.subplots(2, 2,
+    fig, ((ax_hit, ax_fa), (ax_miss, ax_cr)) = pyplot.subplots(2, 2,
                                                                sharex=True, sharey=True,
                                                                figsize=(21, 14))
     ax_hit.set_title("HIT")
@@ -116,13 +116,14 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
         else:
             raise ValueError()
         # Plot lines on this axis
-        ax.plot(activation_df.index.values,
-                activation_df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].values,
-                sm_colour, linewidth=linewidth)
+        df = activation_df[activation_df.index <= decision_made_at_time]
+        ax.plot(df.index.values,
+                df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].values,
+                color=sm_colour, linewidth=linewidth)
         for a in modified_word_tokenize(object_label_linguistic):
-            ax.plot(activation_df.index.values,
-                    activation_df[OBJECT_ACTIVATION_LINGUISTIC_f.format(a)].values,
-                    ling_colour, linewidth=linewidth)
+            ax.plot(df.index.values,
+                    df[OBJECT_ACTIVATION_LINGUISTIC_f.format(a)].values,
+                    color=ling_colour, linewidth=linewidth)
     # Plot reference lines
     for ax in [ax_hit, ax_miss, ax_fa, ax_cr]:
         ax.axhline(y=decision_threshold_yes, linewidth=linewidth, color=ref_colour)
