@@ -103,6 +103,7 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
         linewidth = 3
         sm_colour = f"#ff8800{alpha}"
         ling_colour = f"#0088ff{alpha}"
+        ref_colour = f"#000000{alpha}"
         # Determine correct axis
         if model_outcome == Outcome.Hit:
             ax = ax_hit
@@ -122,6 +123,10 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
             ax.plot(activation_df.index.values,
                     activation_df[OBJECT_ACTIVATION_LINGUISTIC_f.format(a)].values,
                     ling_colour, linewidth=linewidth)
+    # Plot reference lines
+    for ax in [ax_hit, ax_miss, ax_fa, ax_cr]:
+        ax.axhline(y=decision_threshold_yes, linewidth=linewidth, color=ref_colour)
+        ax.axhline(y=decision_threshold_no, linewidth=linewidth, color=ref_colour)
     pyplot.tight_layout()
 
     fig_path = Path(save_dir, f"activations {spec.shorthand}.png")
