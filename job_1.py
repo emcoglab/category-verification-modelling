@@ -1,4 +1,3 @@
-from copy import deepcopy
 from pathlib import Path
 from typing import Dict
 
@@ -48,17 +47,11 @@ class Job_1(CategoryVerificationJob):
 
 if __name__ == '__main__':
 
-    # Testing everything with a range of CCAs
-    ccas = [1, .5, 0]
-
     jobs = []
     s: CategoryVerificationJobSpec
-    for s in CategoryVerificationJobSpec.load_multiple(
-            Path(Path(__file__).parent, "job_specifications/2021-08-16 educated guesses.yaml")):
-        for cca in ccas:
-            spec = deepcopy(s)
-            spec.cross_component_attenuation = cca
-            jobs.append(Job_1(spec))
+    for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
+                                                            "job_specifications/2021-09-07 Finer search around a good model.yaml")):
+        jobs.append(Job_1(s))
 
     for job in jobs:
         job.submit(extra_arguments=[])

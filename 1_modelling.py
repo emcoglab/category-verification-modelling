@@ -49,10 +49,10 @@ from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import Sens
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
-from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available
+from framework.data.category_verification_data import CategoryVerificationItemData, decompose_multiword, \
+    substitutions_for
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
-from framework.utils import decompose_multiword
 
 # Shared
 _SN = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
@@ -185,10 +185,8 @@ def main(job_spec: CategoryVerificationJobSpec):
         activation_tracking_path = Path(activation_tracking_dir, f"{category_label}-{object_label} activation.csv")
         buffer_entries_path = Path(buffer_entries_dir, f"{category_label}-{object_label} buffer.csv")
 
-        category_label_linguistic = apply_substitution_if_available(category_label, cv_item_data.substitutions_linguistic)
-        category_label_sensorimotor = apply_substitution_if_available(category_label, cv_item_data.substitutions_sensorimotor)
-        object_label_linguistic = apply_substitution_if_available(object_label, cv_item_data.substitutions_linguistic)
-        object_label_sensorimotor = apply_substitution_if_available(object_label, cv_item_data.substitutions_sensorimotor)
+        object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
+        category_label_linguistic, category_label_sensorimotor = substitutions_for(category_label)
 
         category_label_linguistic_multiword_parts = decompose_multiword(category_label_linguistic)
         object_label_linguistic_multiword_parts = decompose_multiword(object_label_linguistic)
