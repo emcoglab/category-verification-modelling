@@ -90,17 +90,18 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
 
         object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
 
-        model_decision, decision_made_at_time = make_model_decision(object_label,
-                                                                    decision_threshold_no, decision_threshold_yes,
-                                                                    activation_df,
-                                                                    spec)
+        model_decision, decision_made_at_time, component = make_model_decision(
+            object_label,
+            decision_threshold_no, decision_threshold_yes,
+            activation_df,
+            spec)
 
         model_outcome: Outcome = Outcome.from_decision(
             decision=model_decision,
             should_be_yes=CategoryVerificationItemData().is_correct(category_label, object_label))
 
-        alpha = 25
-        linewidth = 3
+        alpha = 50
+        linewidth = 2
         sm_colour = f"#ff8800{alpha}"
         ling_colour = f"#0088ff{alpha}"
         ref_colour = f"#000000{alpha}"
@@ -120,10 +121,20 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
         ax.plot(df.index.values,
                 df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].values,
                 color=sm_colour, linewidth=linewidth)
+        if component is not None and component == component.sensorimotor:
+            # Plot decision dot
+            ax.scatter(df.index.values[-1], df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].values[-1],
+                       marker='o', color=sm_colour)
         for a in modified_word_tokenize(object_label_linguistic):
             ax.plot(df.index.values,
                     df[OBJECT_ACTIVATION_LINGUISTIC_f.format(a)].values,
                     color=ling_colour, linewidth=linewidth)
+            if component is not None and component == component.linguistic:
+                # Plot decision dot
+                # TODO: when there are multiple items and only one of them contributed to the decision, we're still
+                #  plotting dots on all of them, which means the dots can end up in weird places
+                ax.scatter(df.index.values[-1], df[OBJECT_ACTIVATION_LINGUISTIC_f.format(a)].values[-1],
+                           marker='o', color=ling_colour)
     # Plot reference lines
     for ax in [ax_hit, ax_miss, ax_fa, ax_cr]:
         ax.axhline(y=decision_threshold_yes, linewidth=linewidth, color=ref_colour)
