@@ -28,8 +28,9 @@ from scipy.stats import norm
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
 from framework.cognitive_model.components import FULL_ACTIVATION
-from framework.data.category_verification_data import ColNames, CategoryVerificationItemData, decompose_multiword, \
-    substitutions_for
+from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
+from framework.data.category_verification_data import ColNames, CategoryVerificationItemData
+from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 
 
@@ -178,7 +179,7 @@ class _Decider:
 def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int]:
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
-    object_label_linguistic_multiword_parts: List[str] = decompose_multiword(object_label_linguistic)
+    object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
 
     sensorimotor_decider = _Decider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
     linguistic_deciders = [
@@ -197,6 +198,7 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
         for decision in [sensorimotor_decision, *linguistic_decisions]:
             if decision.made:
                 return decision, tick
+    # If we run out of time
     return Decision.Undecided, spec.run_for_ticks
 
 
@@ -294,8 +296,8 @@ def is_repeated_item(category_label: str, object_label: str) -> bool:
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
     category_label_linguistic, category_label_sensorimotor = substitutions_for(category_label)
-    category_label_linguistic_multiword_parts: List[str] = decompose_multiword(category_label_linguistic)
-    object_label_linguistic_multiword_parts: List[str] = decompose_multiword(object_label_linguistic)
+    category_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(category_label_linguistic)
+    object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
 
     all_category_words = set(category_label_linguistic_multiword_parts) | {category_label_sensorimotor}
     all_object_words = set(object_label_linguistic_multiword_parts) | {object_label_sensorimotor}

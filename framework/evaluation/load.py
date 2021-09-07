@@ -11,6 +11,9 @@ _logger = getLogger(__file__)
 
 
 def load_model_output_from_dir(model_output_dir: Path) -> Dict[Tuple[str, str], DataFrame]:
+    """
+    Returns a (category_label, object_label)-keyed dictionary of activation traces.
+    """
     _logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
 
     # (object, item) -> model_data

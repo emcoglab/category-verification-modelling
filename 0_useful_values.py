@@ -31,7 +31,8 @@ from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_propagator import LinguisticPropagator
 from framework.cognitive_model.sensorimotor_propagator import SensorimotorPropagator
 from framework.cognitive_model.utils.logging import logger
-from framework.data.category_verification_data import CategoryVerificationItemData, substitutions_for
+from framework.data.category_verification_data import CategoryVerificationItemData
+from framework.data.substitution import substitutions_for
 
 
 def pairwise_lengths(linguistic_length_factor: int, linguistic_words: int, sensorimotor_length_factor: int):

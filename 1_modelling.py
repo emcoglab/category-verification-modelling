@@ -31,6 +31,7 @@ from framework.cognitive_model.combined_cognitive_model import InteractiveCombin
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.events import ItemEnteredBufferEvent
 from framework.cognitive_model.graph_propagator import Guard
+from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_components import LinguisticComponent
 from framework.cognitive_model.preferences.preferences import Preferences
@@ -41,8 +42,8 @@ from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import Sens
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
-from framework.data.category_verification_data import CategoryVerificationItemData, decompose_multiword, \
-    substitutions_for
+from framework.data.category_verification_data import CategoryVerificationItemData
+from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
 
@@ -88,7 +89,7 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
             category_activation_sensorimotor_dict = {
                 CATEGORY_ACTIVATION_SENSORIMOTOR_f.format(part)
                 : model.sensorimotor_component.propagator.activation_of_item_with_label(part)
-                for part in decompose_multiword(category_label_sensorimotor)
+                for part in modified_word_tokenize(category_label_sensorimotor)
             }
         except ItemNotFoundError:
             # If this item really doesn't exist, we can omit the activation
@@ -180,8 +181,8 @@ def main(job_spec: CategoryVerificationJobSpec):
         object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
         category_label_linguistic, category_label_sensorimotor = substitutions_for(category_label)
 
-        category_label_linguistic_multiword_parts = decompose_multiword(category_label_linguistic)
-        object_label_linguistic_multiword_parts = decompose_multiword(object_label_linguistic)
+        category_label_linguistic_multiword_parts = modified_word_tokenize(category_label_linguistic)
+        object_label_linguistic_multiword_parts = modified_word_tokenize(object_label_linguistic)
 
         object_prevalence: float
         try:

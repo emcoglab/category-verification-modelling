@@ -42,8 +42,7 @@ logger_dateformat = "1%Y-%m-%d %H:%M:%S"
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
 
 # Shared
-CV_SUBJECT_DATA: CategoryVerificationParticipantOriginal = CategoryVerificationParticipantOriginal()
-THRESHOLDS = [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1.0]  # linspace was causing weird float rounding errors
+THRESHOLDS = [i / 100 for i in range(101)]  # linspace was causing weird float rounding errors
 
 
 def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restrict_to_answerable_items: bool, overwrite: bool):
@@ -103,7 +102,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
         columns=["Decision threshold (no)", "Decision threshold (yes)", ColNames.DPrime])
     with Path(save_dir, f"{filename_prefix} dprimes.csv").open("w") as f:
         dprimes_df.to_csv(f, header=True, index=False)
-    dprimes_df[f"{ColNames.DPrime} absolute difference"] = abs(CV_SUBJECT_DATA.summary_dataframe[ColNames.DPrime].mean() - dprimes_df[ColNames.DPrime])
+    dprimes_df[f"{ColNames.DPrime} absolute difference"] = abs(CategoryVerificationParticipantOriginal().summary_dataframe[ColNames.DPrime].mean() - dprimes_df[ColNames.DPrime])
     save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes.png"), value_col=ColNames.DPrime, vlims=(None, None))
     save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes difference.png"), value_col=f"{ColNames.DPrime} absolute difference", vlims=(0, None))
 
@@ -114,7 +113,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
     with Path(save_dir, f"{filename_prefix} criteria.csv").open("w") as f:
         criteria_df.to_csv(f, header=True, index=False)
     # Difference to subject-average criterion
-    criteria_df[f"{ColNames.Criterion} absolute difference"] = abs(CV_SUBJECT_DATA.summary_dataframe[ColNames.Criterion].mean() - criteria_df[ColNames.Criterion])
+    criteria_df[f"{ColNames.Criterion} absolute difference"] = abs(CategoryVerificationParticipantOriginal().summary_dataframe[ColNames.Criterion].mean() - criteria_df[ColNames.Criterion])
     save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col=ColNames.Criterion, vlims=(None, None))
     save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria difference.png"), value_col=f"{ColNames.Criterion} absolute difference", vlims=(0, None))
 
@@ -135,8 +134,10 @@ if __name__ == '__main__':
         Path(Path(__file__).parent, "job_specifications", "2021-07-15 40k different decay.yaml")))
     loaded_specs.extend(CategoryVerificationJobSpec.load_multiple(
         Path(Path(__file__).parent, "job_specifications", "2021-06-25 search for more sensible parameters.yaml")))
-    systematic_cca_test = True
+    loaded_specs.extend(CategoryVerificationJobSpec.load_multiple(
+        Path(Path(__file__).parent, "job_specifications", "2021-09-07 Finer search around a good model.yaml")))
 
+    systematic_cca_test = False
     if systematic_cca_test:
         ccas = [1.0, 0.5, 0.0]
         specs = []
