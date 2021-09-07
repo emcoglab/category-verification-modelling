@@ -28,10 +28,9 @@ from scipy.stats import norm
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
 from framework.cognitive_model.components import FULL_ACTIVATION
-from framework.data.category_verification_data import apply_substitution_if_available, CategoryVerificationItemData, \
-    ColNames
+from framework.data.category_verification_data import ColNames, CategoryVerificationItemData, decompose_multiword, \
+    substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
-from framework.utils import decompose_multiword
 
 
 class Outcome(Enum):
@@ -176,13 +175,11 @@ class _Decider:
         return decisions
 
 
-def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec,
-                        cv_item_data: CategoryVerificationItemData = None) -> Tuple[Decision, int]:
-    if cv_item_data is None:
-        cv_item_data = CategoryVerificationItemData()
-    object_label_sensorimotor: str = apply_substitution_if_available(object_label, cv_item_data.substitutions_sensorimotor)
-    object_label_linguistic: str = apply_substitution_if_available(object_label, cv_item_data.substitutions_linguistic)
+def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int]:
+
+    object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
     object_label_linguistic_multiword_parts: List[str] = decompose_multiword(object_label_linguistic)
+
     sensorimotor_decider = _Decider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
     linguistic_deciders = [
         _Decider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
@@ -207,20 +204,17 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
                                restrict_to_answerable_items: bool,
                                exclude_repeated_items: bool,
                                decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
-                               spec: CategoryVerificationJobSpec, save_dir: Path,
-                               cv_item_data: CategoryVerificationItemData = None) -> Tuple[float, float, float]:
+                               spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
     """Returns correct_rate and dprime and criterion."""
-    if cv_item_data is None:
-        cv_item_data = CategoryVerificationItemData()
 
     zed = norm.ppf
 
-    ground_truth_dataframe = cv_item_data.dataframe
+    ground_truth_dataframe = CategoryVerificationItemData().dataframe
 
     model_guesses = []
-    category_item_pairs: List[Tuple[str, str]] = cv_item_data.category_object_pairs()
+    category_item_pairs: List[Tuple[str, str]] = CategoryVerificationItemData().category_object_pairs()
     for category_label, object_label in category_item_pairs:
-        item_is_of_category: bool = cv_item_data.is_correct(category_label, object_label)
+        item_is_of_category: bool = CategoryVerificationItemData().is_correct(category_label, object_label)
 
         try:
             model_data = all_model_data[(category_label, object_label)]
@@ -296,17 +290,10 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
     return model_correct_rate, model_dprime, model_criterion
 
 
-def is_repeated_item(category_label: str, object_label: str,
-                     cv_item_data: CategoryVerificationItemData = None) -> bool:
-    if cv_item_data is None:
-        cv_item_data = CategoryVerificationItemData()
+def is_repeated_item(category_label: str, object_label: str) -> bool:
 
-    # Use the same decomposition/translation logic as elsewhere
-    # TODO: this should be refactored into one place!
-    category_label_linguistic: str = apply_substitution_if_available(category_label, cv_item_data.substitutions_linguistic)
-    category_label_sensorimotor: str = apply_substitution_if_available(category_label, cv_item_data.substitutions_sensorimotor)
-    object_label_linguistic: str = apply_substitution_if_available(object_label, cv_item_data.substitutions_linguistic)
-    object_label_sensorimotor: str = apply_substitution_if_available(object_label, cv_item_data.substitutions_sensorimotor)
+    object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
+    category_label_linguistic, category_label_sensorimotor = substitutions_for(category_label)
     category_label_linguistic_multiword_parts: List[str] = decompose_multiword(category_label_linguistic)
     object_label_linguistic_multiword_parts: List[str] = decompose_multiword(object_label_linguistic)
 

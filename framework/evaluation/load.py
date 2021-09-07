@@ -10,16 +10,12 @@ from framework.evaluation.column_names import CLOCK
 _logger = getLogger(__file__)
 
 
-def load_model_output_from_dir(model_output_dir: Path,
-                               cv_item_data: CategoryVerificationItemData = None) -> Dict[Tuple[str, str], DataFrame]:
+def load_model_output_from_dir(model_output_dir: Path) -> Dict[Tuple[str, str], DataFrame]:
     _logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
-
-    if cv_item_data is None:
-        cv_item_data = CategoryVerificationItemData()
 
     # (object, item) -> model_data
     all_model_data: Dict[Tuple[str, str], DataFrame] = dict()
-    for category_label, object_label in cv_item_data.category_object_pairs():
+    for category_label, object_label in CategoryVerificationItemData().category_object_pairs():
         model_output_path = Path(model_output_dir, "activation traces",
                                  f"{category_label}-{object_label} activation.csv")
         if not model_output_path.exists():

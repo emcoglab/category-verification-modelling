@@ -31,7 +31,7 @@ from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_propagator import LinguisticPropagator
 from framework.cognitive_model.sensorimotor_propagator import SensorimotorPropagator
 from framework.cognitive_model.utils.logging import logger
-from framework.data.category_verification_data import CategoryVerificationItemData, apply_substitution_if_available
+from framework.data.category_verification_data import CategoryVerificationItemData, substitutions_for
 
 
 def pairwise_lengths(linguistic_length_factor: int, linguistic_words: int, sensorimotor_length_factor: int):
@@ -62,11 +62,8 @@ def pairwise_lengths(linguistic_length_factor: int, linguistic_words: int, senso
     min_sensorimotor_length, max_sensorimotor_length = inf, -inf
     min_linguistic_length, max_linguistic_length = inf, -inf
     for category_label, object_label in cv_item_data.category_object_pairs():
-
-        category_label_linguistic = apply_substitution_if_available(category_label, cv_item_data.substitutions_linguistic)
-        object_label_linguistic = apply_substitution_if_available(object_label, cv_item_data.substitutions_linguistic)
-        category_label_sensorimotor = apply_substitution_if_available(category_label, cv_item_data.substitutions_sensorimotor)
-        object_label_sensorimotor = apply_substitution_if_available(object_label, cv_item_data.substitutions_sensorimotor)
+        object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
+        category_label_linguistic, category_label_sensorimotor = substitutions_for(category_label)
 
         # Linguistic
 
