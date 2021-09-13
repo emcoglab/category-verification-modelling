@@ -1,29 +1,29 @@
 corpora:
   bnc:
     name:  "BNC"
-    path:  "/storage/users/wingfiel/corpora/BNC/2 Tokenised/BNC.corpus"
-    index: "/storage/users/wingfiel/indexes/BNC.freqdist"
+    path:  "/storage/users/vanhoef/corpora/BNC/2 Tokenised/BNC.corpus"
+    index: "/storage/users/vanhoef/indexes/BNC.freqdist"
   subtitles:
     name:  "BBC"
-    path:  "/storage/users/wingfiel/corpora/BBC/4 Tokenised/BBC.corpus"
-    index: "/storage/users/wingfiel/indexes/BBC.freqdist"
+    path:  "/storage/users/vanhoef/corpora/BBC.corpus"
+    index: "/storage/users/vanhoef/indexes/BBC.freqdist"
   ukwac:
     name:  "UKWAC"
-    path:  "/storage/users/wingfiel/corpora/UKWAC/3 Tokenised/UKWAC.corpus"
-    index: "/storage/users/wingfiel/indexes/UKWAC.freqdist"
+    path:  "/storage/users/vanhoef/corpora/UKWAC/3 Tokenised/UKWAC.corpus"
+    index: "/storage/users/vanhoef/indexes/UKWAC.freqdist"
 
 models:
-  directory: "/storage/users/wingfiel/vectors/"
+  directory: "/storage/users/vanhoef/vectors/ppmi"
 
-sensorimotor-norms-location: "/storage/users/wingfiel/experimental_data/FINAL_sensorimotor_norms_for_39707_words.csv"
+sensorimotor-norms-location: "/storage/users/vanhoef/experimental_data/FINAL_sensorimotor_norms_for_39707_words.csv"
 
 # Notification emails
-email_connection_details: "/mmfs1/home/users/wingfiel/notify@cwcomplex.net.txt"
+# email_connection_details: "/mmfs1/home/users/wingfiel/notify@cwcomplex.net.txt"
 
 # Data directories
-graphs_dir:             "/mmfs1/storage/users/wingfiel/graphs"
+graphs_dir:             "/mmfs1/storage/users/vanhoef/graphs"
 
-output_dir:             "/mmfs1/scratch/hpc/57/wingfiel/spreading_activation_results/Model output/"
-evaluation_dir:         "/mmfs1/storage/users/wingfiel/spreading_activation_results/Evaluation/"
-ancillary_dir:          "/mmfs1/storage/users/wingfiel/spreading_activation_results/Ancillary results/"
-figures_dir:            "/mmfs1/storage/users/wingfiel/spreading_activation_results/Figures/"
+output_dir:             "/mmfs1/scratch/hpc/27/vanhoef/spreading_activation_results/Model output/"
+evaluation_dir:         "/mmfs1/storage/users/vanhoef/spreading_activation_results/Evaluation/"
+ancillary_dir:          "/mmfs1/storage/users/vanhoef/spreading_activation_results/Ancillary results/"
+figures_dir:            "/mmfs1/storage/users/vanhoef/spreading_activation_results/Figures/"
