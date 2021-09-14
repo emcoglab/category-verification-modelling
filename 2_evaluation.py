@@ -42,7 +42,8 @@ logger_dateformat = "1%Y-%m-%d %H:%M:%S"
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
 
 # Shared
-THRESHOLDS = [i / 100 for i in range(101)]  # linspace was causing weird float rounding errors
+_n_thresholds = 20
+THRESHOLDS = [i / _n_thresholds for i in range(_n_thresholds + 1)]  # linspace was causing weird float rounding errors
 
 
 def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restrict_to_answerable_items: bool, overwrite: bool):
@@ -87,6 +88,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
                 exclude_repeated_items=exclude_repeated_items,
                 decision_threshold_yes=decision_threshold_yes,
                 decision_threshold_no=decision_threshold_no,
+                loglinear=True,
                 spec=spec, save_dir=Path(save_dir, "hitrates by threshold"))
             hitrates.append((decision_threshold_no, decision_threshold_yes, hitrate))
             dprimes.append((decision_threshold_no, decision_threshold_yes, dprime))

@@ -210,8 +210,13 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
                                restrict_to_answerable_items: bool,
                                exclude_repeated_items: bool,
                                decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
+                               loglinear: bool,
                                spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
-    """Returns correct_rate and dprime and criterion."""
+    """
+    Returns correct_rate and dprime and criterion.
+
+    :param loglinear: use the loglinear transform for computing d' and criterion (but not for hitrate).
+    """
 
     zed = norm.ppf
 
@@ -281,9 +286,17 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
         n_trials_signal = len(results_dataframe[results_dataframe[ColNames.ShouldBeVerified] == True])
         n_trials_noise = len(results_dataframe[results_dataframe[ColNames.ShouldBeVerified] == False])
 
+    model_correct_rate = model_correct_count / (n_trials_signal + n_trials_noise)
+
+    if loglinear:
+        # See Stanislav & Todorov (1999, BRMIC)
+        model_hit_count += 0.5
+        model_fa_count += 0.5
+        n_trials_signal += 1
+        n_trials_noise += 1
+
     model_hit_rate = model_hit_count / n_trials_signal
     model_false_alarm_rate = model_fa_count / n_trials_noise
-    model_correct_rate = model_correct_count / n_trials_signal + n_trials_noise
 
     # This is a simple Y/N task, not a 2AFC, so we can just use standard d-prime
     if (model_hit_rate == 0) or (model_false_alarm_rate == 1) or (model_false_alarm_rate == 0) or (model_hit_rate == 1):
