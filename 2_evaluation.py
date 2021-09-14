@@ -101,23 +101,23 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
         dprimes,
-        columns=["Decision threshold (no)", "Decision threshold (yes)", ColNames.DPrime])
+        columns=["Decision threshold (no)", "Decision threshold (yes)", ColNames.DPrime_loglinear])
     with Path(save_dir, f"{filename_prefix} dprimes.csv").open("w") as f:
         dprimes_df.to_csv(f, header=True, index=False)
-    dprimes_df[f"{ColNames.DPrime} absolute difference"] = abs(CategoryVerificationParticipantOriginal().summary_dataframe[ColNames.DPrime].mean() - dprimes_df[ColNames.DPrime])
-    save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes.png"), value_col=ColNames.DPrime, vlims=(None, None))
-    save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes difference.png"), value_col=f"{ColNames.DPrime} absolute difference", vlims=(0, None))
+    dprimes_df[f"{ColNames.DPrime_loglinear} absolute difference"] = abs(CategoryVerificationParticipantOriginal().summarise_dataframe()[ColNames.DPrime_loglinear].mean() - dprimes_df[ColNames.DPrime_loglinear])
+    save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes.png"), value_col=ColNames.DPrime_loglinear, vlims=(None, None))
+    save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes difference.png"), value_col=f"{ColNames.DPrime_loglinear} absolute difference", vlims=(0, None))
 
     # Save overall criteria
     criteria_df = DataFrame.from_records(
         criteria,
-        columns=["Decision threshold (no)", "Decision threshold (yes)", ColNames.Criterion])
+        columns=["Decision threshold (no)", "Decision threshold (yes)", ColNames.Criterion_loglinear])
     with Path(save_dir, f"{filename_prefix} criteria.csv").open("w") as f:
         criteria_df.to_csv(f, header=True, index=False)
     # Difference to subject-average criterion
-    criteria_df[f"{ColNames.Criterion} absolute difference"] = abs(CategoryVerificationParticipantOriginal().summary_dataframe[ColNames.Criterion].mean() - criteria_df[ColNames.Criterion])
-    save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col=ColNames.Criterion, vlims=(None, None))
-    save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria difference.png"), value_col=f"{ColNames.Criterion} absolute difference", vlims=(0, None))
+    criteria_df[f"{ColNames.Criterion_loglinear} absolute difference"] = abs(CategoryVerificationParticipantOriginal().summarise_dataframe()[ColNames.Criterion_loglinear].mean() - criteria_df[ColNames.Criterion_loglinear])
+    save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col=ColNames.Criterion_loglinear, vlims=(None, None))
+    save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria difference.png"), value_col=f"{ColNames.Criterion_loglinear} absolute difference", vlims=(0, None))
 
     _logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
     _logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10 < t[2] < 10)}")
