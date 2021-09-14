@@ -155,10 +155,10 @@ if __name__ == '__main__':
     seed(1)  # Reproducible results
 
     spec = CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent, "job_specifications",
-                                                          "2021-08-16 educated guesses.yaml"))[0]
+                                                          "2021-06-25 search for more sensible parameters.yaml"))[1]
 
     main(spec=spec,
-         decision_threshold_yes=0.5,
+         decision_threshold_yes=0.4,
          decision_threshold_no=0.3,
          exclude_repeated_items=True,
          overwrite=True)

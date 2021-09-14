@@ -1,13 +1,13 @@
 # No longer doing systematic CCA variance — ask for it if you want it
 
-# This is exactly a well-performing model from 2021-08-16 [0?]
+# This is exactly a well-performing model from 2021-06-25 [1]
 - Bailout: 20000
   Run for ticks: 500
   (Sensorimotor) Accessible set capacity: 3000
   (Sensorimotor) Use activation cap: True
   (Sensorimotor) Length factor: 162
   (Sensorimotor) Distance type: 'Minkowski-3'
-  (Sensorimotor) Log-normal median: 1.0
+  (Sensorimotor) Log-normal median: 5.0
   (Sensorimotor) Log-normal sigma: 0.9
   (Sensorimotor) Max radius: 1.5
   (Sensorimotor) Attenuation statistic: 'Prevalence'
@@ -19,7 +19,7 @@
   (Linguistic) Model name: 'ppmi_ngram'
   (Linguistic) Model radius: 5
   (Linguistic) Corpus name: 'bbc'
-  (Linguistic) Node decay: 0.975
+  (Linguistic) Node decay: 0.95
   (Linguistic) Edge decay SD: 15.0
   Buffer capacity (linguistic items): 12
   Buffer capacity (sensorimotor items): 9
@@ -30,22 +30,22 @@
   (Linguistic) Firing threshold: 0.35
   (Linguistic) Accessible set threshold: 0.35
   (Sensorimotor) Accessible set threshold: 0.4
-  Buffer threshold: 0.5
+  Buffer threshold: 0.4
   Linguistic to sensorimotor threshold: 0.4
   Sensorimotor to linguistic threshold: 0.4
   # New params
   SOA: 241
-  Object activation: 0.5
+  Object activation: 0.3
   Incremental activation duration: 121
 
-# Some slight adjustments to OA level
+# Same, but with a larger activation
 - Bailout: 20000
   Run for ticks: 500
   (Sensorimotor) Accessible set capacity: 3000
   (Sensorimotor) Use activation cap: True
   (Sensorimotor) Length factor: 162
   (Sensorimotor) Distance type: 'Minkowski-3'
-  (Sensorimotor) Log-normal median: 1.0
+  (Sensorimotor) Log-normal median: 5.0
   (Sensorimotor) Log-normal sigma: 0.9
   (Sensorimotor) Max radius: 1.5
   (Sensorimotor) Attenuation statistic: 'Prevalence'
@@ -57,7 +57,7 @@
   (Linguistic) Model name: 'ppmi_ngram'
   (Linguistic) Model radius: 5
   (Linguistic) Corpus name: 'bbc'
-  (Linguistic) Node decay: 0.975
+  (Linguistic) Node decay: 0.95
   (Linguistic) Edge decay SD: 15.0
   Buffer capacity (linguistic items): 12
   Buffer capacity (sensorimotor items): 9
@@ -68,58 +68,58 @@
   (Linguistic) Firing threshold: 0.35
   (Linguistic) Accessible set threshold: 0.35
   (Sensorimotor) Accessible set threshold: 0.4
-  Buffer threshold: 0.5
-  Linguistic to sensorimotor threshold: 0.4
-  Sensorimotor to linguistic threshold: 0.4
-  # New params
-  SOA: 241
-  Object activation: 0.6
-  Incremental activation duration: 121
-- Bailout: 20000
-  Run for ticks: 500
-  (Sensorimotor) Accessible set capacity: 3000
-  (Sensorimotor) Use activation cap: True
-  (Sensorimotor) Length factor: 162
-  (Sensorimotor) Distance type: 'Minkowski-3'
-  (Sensorimotor) Log-normal median: 1.0
-  (Sensorimotor) Log-normal sigma: 0.9
-  (Sensorimotor) Max radius: 1.5
-  (Sensorimotor) Attenuation statistic: 'Prevalence'
-  (Linguistic) Words: 40000
-  (Linguistic) Impulse pruning threshold: 0.05
-  (Linguistic) Accessible set capacity: 3000
-  (Linguistic) Use activation cap: True
-  (Linguistic) Length factor: 10
-  (Linguistic) Model name: 'ppmi_ngram'
-  (Linguistic) Model radius: 5
-  (Linguistic) Corpus name: 'bbc'
-  (Linguistic) Node decay: 0.975
-  (Linguistic) Edge decay SD: 15.0
-  Buffer capacity (linguistic items): 12
-  Buffer capacity (sensorimotor items): 9
-  Linguistic to sensorimotor delay: 21
-  Sensorimotor to linguistic delay: 56
-  Cross-component attenuation: 1.0
-  # Thresholds
-  (Linguistic) Firing threshold: 0.35
-  (Linguistic) Accessible set threshold: 0.35
-  (Sensorimotor) Accessible set threshold: 0.4
-  Buffer threshold: 0.5
+  Buffer threshold: 0.4
   Linguistic to sensorimotor threshold: 0.4
   Sensorimotor to linguistic threshold: 0.4
   # New params
   SOA: 241
   Object activation: 0.4
   Incremental activation duration: 121
+- Bailout: 20000
+  Run for ticks: 500
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.95
+  (Linguistic) Edge decay SD: 15.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0
+  # Thresholds
+  (Linguistic) Firing threshold: 0.35
+  (Linguistic) Accessible set threshold: 0.35
+  (Sensorimotor) Accessible set threshold: 0.4
+  Buffer threshold: 0.4
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
+  # New params
+  SOA: 241
+  Object activation: 0.5
+  Incremental activation duration: 121
 
-# Some slightly different decays
+# Same, but with a sharper SM decay
 - Bailout: 20000
   Run for ticks: 500
   (Sensorimotor) Accessible set capacity: 3000
   (Sensorimotor) Use activation cap: True
   (Sensorimotor) Length factor: 162
   (Sensorimotor) Distance type: 'Minkowski-3'
-  (Sensorimotor) Log-normal median: 1.0
+  (Sensorimotor) Log-normal median: 3.0
   (Sensorimotor) Log-normal sigma: 0.9
   (Sensorimotor) Max radius: 1.5
   (Sensorimotor) Attenuation statistic: 'Prevalence'
@@ -131,7 +131,7 @@
   (Linguistic) Model name: 'ppmi_ngram'
   (Linguistic) Model radius: 5
   (Linguistic) Corpus name: 'bbc'
-  (Linguistic) Node decay: 0.97  # <-----------------------------------
+  (Linguistic) Node decay: 0.95
   (Linguistic) Edge decay SD: 15.0
   Buffer capacity (linguistic items): 12
   Buffer capacity (sensorimotor items): 9
@@ -142,12 +142,12 @@
   (Linguistic) Firing threshold: 0.35
   (Linguistic) Accessible set threshold: 0.35
   (Sensorimotor) Accessible set threshold: 0.4
-  Buffer threshold: 0.5
+  Buffer threshold: 0.4
   Linguistic to sensorimotor threshold: 0.4
   Sensorimotor to linguistic threshold: 0.4
   # New params
   SOA: 241
-  Object activation: 0.5
+  Object activation: 0.3
   Incremental activation duration: 121
 - Bailout: 20000
   Run for ticks: 500
@@ -155,7 +155,7 @@
   (Sensorimotor) Use activation cap: True
   (Sensorimotor) Length factor: 162
   (Sensorimotor) Distance type: 'Minkowski-3'
-  (Sensorimotor) Log-normal median: 1.0
+  (Sensorimotor) Log-normal median: 2.0
   (Sensorimotor) Log-normal sigma: 0.9
   (Sensorimotor) Max radius: 1.5
   (Sensorimotor) Attenuation statistic: 'Prevalence'
@@ -167,7 +167,7 @@
   (Linguistic) Model name: 'ppmi_ngram'
   (Linguistic) Model radius: 5
   (Linguistic) Corpus name: 'bbc'
-  (Linguistic) Node decay: 0.98  # <-----------------------------------
+  (Linguistic) Node decay: 0.95
   (Linguistic) Edge decay SD: 15.0
   Buffer capacity (linguistic items): 12
   Buffer capacity (sensorimotor items): 9
@@ -178,21 +178,23 @@
   (Linguistic) Firing threshold: 0.35
   (Linguistic) Accessible set threshold: 0.35
   (Sensorimotor) Accessible set threshold: 0.4
-  Buffer threshold: 0.5
+  Buffer threshold: 0.4
   Linguistic to sensorimotor threshold: 0.4
   Sensorimotor to linguistic threshold: 0.4
   # New params
   SOA: 241
-  Object activation: 0.5
+  Object activation: 0.3
   Incremental activation duration: 121
+
+# Same but with change to lognormal sigma
 - Bailout: 20000
   Run for ticks: 500
   (Sensorimotor) Accessible set capacity: 3000
   (Sensorimotor) Use activation cap: True
   (Sensorimotor) Length factor: 162
   (Sensorimotor) Distance type: 'Minkowski-3'
-  (Sensorimotor) Log-normal median: 2.0   # <-----------------------------------
-  (Sensorimotor) Log-normal sigma: 0.9
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 0.8
   (Sensorimotor) Max radius: 1.5
   (Sensorimotor) Attenuation statistic: 'Prevalence'
   (Linguistic) Words: 40000
@@ -203,7 +205,7 @@
   (Linguistic) Model name: 'ppmi_ngram'
   (Linguistic) Model radius: 5
   (Linguistic) Corpus name: 'bbc'
-  (Linguistic) Node decay: 0.975
+  (Linguistic) Node decay: 0.95
   (Linguistic) Edge decay SD: 15.0
   Buffer capacity (linguistic items): 12
   Buffer capacity (sensorimotor items): 9
@@ -214,21 +216,23 @@
   (Linguistic) Firing threshold: 0.35
   (Linguistic) Accessible set threshold: 0.35
   (Sensorimotor) Accessible set threshold: 0.4
-  Buffer threshold: 0.5
+  Buffer threshold: 0.4
   Linguistic to sensorimotor threshold: 0.4
   Sensorimotor to linguistic threshold: 0.4
   # New params
   SOA: 241
-  Object activation: 0.5
+  Object activation: 0.3
   Incremental activation duration: 121
+
+# Same but with change to lognormal sigma
 - Bailout: 20000
   Run for ticks: 500
   (Sensorimotor) Accessible set capacity: 3000
   (Sensorimotor) Use activation cap: True
   (Sensorimotor) Length factor: 162
   (Sensorimotor) Distance type: 'Minkowski-3'
-  (Sensorimotor) Log-normal median: 1.0
-  (Sensorimotor) Log-normal sigma: 0.8  # <-----------------------------------
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 1.0
   (Sensorimotor) Max radius: 1.5
   (Sensorimotor) Attenuation statistic: 'Prevalence'
   (Linguistic) Words: 40000
@@ -239,7 +243,7 @@
   (Linguistic) Model name: 'ppmi_ngram'
   (Linguistic) Model radius: 5
   (Linguistic) Corpus name: 'bbc'
-  (Linguistic) Node decay: 0.975
+  (Linguistic) Node decay: 0.95
   (Linguistic) Edge decay SD: 15.0
   Buffer capacity (linguistic items): 12
   Buffer capacity (sensorimotor items): 9
@@ -250,10 +254,46 @@
   (Linguistic) Firing threshold: 0.35
   (Linguistic) Accessible set threshold: 0.35
   (Sensorimotor) Accessible set threshold: 0.4
-  Buffer threshold: 0.5
+  Buffer threshold: 0.4
   Linguistic to sensorimotor threshold: 0.4
   Sensorimotor to linguistic threshold: 0.4
   # New params
   SOA: 241
-  Object activation: 0.5
+  Object activation: 0.3
+  Incremental activation duration: 121
+- Bailout: 20000
+  Run for ticks: 500
+  (Sensorimotor) Accessible set capacity: 3000
+  (Sensorimotor) Use activation cap: True
+  (Sensorimotor) Length factor: 162
+  (Sensorimotor) Distance type: 'Minkowski-3'
+  (Sensorimotor) Log-normal median: 5.0
+  (Sensorimotor) Log-normal sigma: 1.5
+  (Sensorimotor) Max radius: 1.5
+  (Sensorimotor) Attenuation statistic: 'Prevalence'
+  (Linguistic) Words: 40000
+  (Linguistic) Impulse pruning threshold: 0.05
+  (Linguistic) Accessible set capacity: 3000
+  (Linguistic) Use activation cap: True
+  (Linguistic) Length factor: 10
+  (Linguistic) Model name: 'ppmi_ngram'
+  (Linguistic) Model radius: 5
+  (Linguistic) Corpus name: 'bbc'
+  (Linguistic) Node decay: 0.95
+  (Linguistic) Edge decay SD: 15.0
+  Buffer capacity (linguistic items): 12
+  Buffer capacity (sensorimotor items): 9
+  Linguistic to sensorimotor delay: 21
+  Sensorimotor to linguistic delay: 56
+  Cross-component attenuation: 1.0
+  # Thresholds
+  (Linguistic) Firing threshold: 0.35
+  (Linguistic) Accessible set threshold: 0.35
+  (Sensorimotor) Accessible set threshold: 0.4
+  Buffer threshold: 0.4
+  Linguistic to sensorimotor threshold: 0.4
+  Sensorimotor to linguistic threshold: 0.4
+  # New params
+  SOA: 241
+  Object activation: 0.3
   Incremental activation duration: 121
