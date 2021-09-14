@@ -24,6 +24,7 @@ from logging import getLogger, basicConfig, INFO
 from pathlib import Path
 from typing import Dict, Tuple
 
+from numpy import inf
 from numpy.random import seed
 from pandas import DataFrame
 
@@ -107,16 +108,18 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
 
     items_subset = list(all_model_data.keys()) if restrict_to_answerable_items else None
 
+    participant_dprime_mean    = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].mean()
+    participant_dprime_sd      = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].std()
+    participant_criterion_mean = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].mean()
+    participant_criterion_sd   = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].std()
+
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
         dprimes,
         columns=["Decision threshold (no)", "Decision threshold (yes)", ColNames.DPrime_loglinear])
     with Path(save_dir, f"{filename_prefix} dprimes.csv").open("w") as f:
         dprimes_df.to_csv(f, header=True, index=False)
-    dprimes_df[f"{ColNames.DPrime_loglinear} absolute difference"] = abs(
-        CategoryVerificationParticipantOriginal()
-        .summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].mean()
-        - dprimes_df[ColNames.DPrime_loglinear])
+    dprimes_df[f"{ColNames.DPrime_loglinear} absolute difference"] = abs(participant_dprime_mean - dprimes_df[ColNames.DPrime_loglinear])
     save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes.png"), value_col=ColNames.DPrime_loglinear, vlims=(None, None))
     save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes difference.png"), value_col=f"{ColNames.DPrime_loglinear} absolute difference", vlims=(0, None))
 
@@ -127,18 +130,24 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
     with Path(save_dir, f"{filename_prefix} criteria.csv").open("w") as f:
         criteria_df.to_csv(f, header=True, index=False)
     # Difference to subject-average criterion
-    criteria_df[f"{ColNames.Criterion_loglinear} absolute difference"] = abs(
-        CategoryVerificationParticipantOriginal()
-        .summarise_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].mean()
-        - criteria_df[ColNames.Criterion_loglinear])
+    criteria_df[f"{ColNames.Criterion_loglinear} absolute difference"] = abs(participant_criterion_mean - criteria_df[ColNames.Criterion_loglinear])
     save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col=ColNames.Criterion_loglinear, vlims=(None, None))
     save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria difference.png"), value_col=f"{ColNames.Criterion_loglinear} absolute difference", vlims=(0, None))
 
     _logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
     _logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10 < t[2] < 10)}")
-    _logger.info(f"Participant dprime mean (SD):"
-                 f" {CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].mean()}"
-                 f" ({CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].std()})")
+    _logger.info(f"Participant dprime mean (SD): {participant_dprime_mean} ({participant_dprime_sd})")
+    _logger.info(f"Participant criterion mean (SD): {participant_criterion_mean} ({participant_criterion_sd})")
+
+    # Find max suitable dprime
+    max_dprime = -inf
+    max_no, max_yes = None, None
+    for (no_th, yes_th, dprime), (_, _, criterion) in zip(dprimes, criteria):
+        if participant_criterion_mean - participant_criterion_sd <= criterion <= participant_criterion_mean + participant_criterion_sd:
+            if dprime > max_dprime:
+                max_dprime = dprime
+                max_no, max_yes = no_th, yes_th
+    _logger.info(f"Best dprime for which criterion is within 1SD of participant mean: {max_dprime} (no={max_no}, yes={max_yes})")
 
 
 if __name__ == '__main__':
