@@ -142,14 +142,16 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
     # Find max suitable dprime
     max_dprime = -inf
     max_no, max_yes = None, None
-    max_hitrate = None
+    max_hitrate, max_criterion = None, None
     for (no_th, yes_th, dprime), (_, _, criterion), (_, _, hitrate) in zip(dprimes, criteria, hitrates):
         if participant_criterion_mean - participant_criterion_sd <= criterion <= participant_criterion_mean + participant_criterion_sd:
             if dprime > max_dprime:
                 max_dprime = dprime
+                # Remember other params for the best dprime
                 max_no, max_yes = no_th, yes_th
-                max_hitrate = hitrate
+                max_hitrate, max_criterion = hitrate, criterion
     _logger.info(f"Best dprime for which criterion is within 1SD of participant mean: {max_dprime} (no={max_no}, yes={max_yes})")
+    _logger.info(f'Criterion for this dprime: {max_criterion}')
     _logger.info(f"Hitrate for this dprime: {max_hitrate}")
 
 
