@@ -19,17 +19,18 @@ from __future__ import annotations
 
 from enum import Enum, auto
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 
 from numpy import nan
 from pandas import DataFrame
 from scipy.stats import norm
 
 from framework.cli.job import CategoryVerificationJobSpec
-from framework.cognitive_model.basic_types import ActivationValue
+from framework.cognitive_model.basic_types import ActivationValue, Component
 from framework.cognitive_model.components import FULL_ACTIVATION
-from framework.data.category_verification_data import ColNames, CategoryVerificationItemData, decompose_multiword, \
-    substitutions_for
+from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
+from framework.data.category_verification_data import ColNames, CategoryVerificationItemData
+from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 
 
@@ -175,10 +176,10 @@ class _Decider:
         return decisions
 
 
-def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int]:
+def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int, Optional[Component]]:
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
-    object_label_linguistic_multiword_parts: List[str] = decompose_multiword(object_label_linguistic)
+    object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
 
     sensorimotor_decider = _Decider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
     linguistic_deciders = [
@@ -194,18 +195,27 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
                 model_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].loc[tick]
                 for part in object_label_linguistic_multiword_parts
             ])
-        for decision in [sensorimotor_decision, *linguistic_decisions]:
+
+        # Return decision when made
+        if sensorimotor_decision.made:
+            return sensorimotor_decision, tick, Component.sensorimotor
+        for decision in linguistic_decisions:
             if decision.made:
-                return decision, tick
-    return Decision.Undecided, spec.run_for_ticks
+                return decision, tick, Component.linguistic
+    # If we run out of time
+    return Decision.Undecided, spec.run_for_ticks, None
 
 
 def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
                                restrict_to_answerable_items: bool,
-                               exclude_repeated_items: bool,
                                decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
+                               loglinear: bool,
                                spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
-    """Returns correct_rate and dprime and criterion."""
+    """
+    Returns correct_rate and dprime and criterion.
+
+    :param loglinear: use the loglinear transform for computing d' and criterion (but not for hitrate).
+    """
 
     zed = norm.ppf
 
@@ -221,15 +231,14 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
         # No model output was saved
         except KeyError:
             continue
-        if exclude_repeated_items and is_repeated_item(category_label, object_label):
-            continue
 
         model_decision: Decision
         decision_made_at_time: int
-        model_decision, decision_made_at_time = make_model_decision(object_label,
-                                                                    decision_threshold_no, decision_threshold_yes,
-                                                                    model_data,
-                                                                    spec)
+        model_decision, decision_made_at_time, _component = make_model_decision(
+            object_label,
+            decision_threshold_no, decision_threshold_yes,
+            model_data,
+            spec)
 
         model_outcome: Outcome = Outcome.from_decision(decision=model_decision, should_be_yes=item_is_of_category)
 
@@ -274,9 +283,17 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
         n_trials_signal = len(results_dataframe[results_dataframe[ColNames.ShouldBeVerified] == True])
         n_trials_noise = len(results_dataframe[results_dataframe[ColNames.ShouldBeVerified] == False])
 
+    model_correct_rate = model_correct_count / (n_trials_signal + n_trials_noise)
+
+    if loglinear:
+        # See Stanislav & Todorov (1999, BRMIC)
+        model_hit_count += 0.5
+        model_fa_count += 0.5
+        n_trials_signal += 1
+        n_trials_noise += 1
+
     model_hit_rate = model_hit_count / n_trials_signal
     model_false_alarm_rate = model_fa_count / n_trials_noise
-    model_correct_rate = model_correct_count / n_trials_signal + n_trials_noise
 
     # This is a simple Y/N task, not a 2AFC, so we can just use standard d-prime
     if (model_hit_rate == 0) or (model_false_alarm_rate == 1) or (model_false_alarm_rate == 0) or (model_hit_rate == 1):
@@ -294,8 +311,8 @@ def is_repeated_item(category_label: str, object_label: str) -> bool:
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
     category_label_linguistic, category_label_sensorimotor = substitutions_for(category_label)
-    category_label_linguistic_multiword_parts: List[str] = decompose_multiword(category_label_linguistic)
-    object_label_linguistic_multiword_parts: List[str] = decompose_multiword(object_label_linguistic)
+    category_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(category_label_linguistic)
+    object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
 
     all_category_words = set(category_label_linguistic_multiword_parts) | {category_label_sensorimotor}
     all_object_words = set(object_label_linguistic_multiword_parts) | {object_label_sensorimotor}

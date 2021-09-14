@@ -743,9 +743,9 @@ class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
     @property
     def shorthand(self) -> str:
         return (
-            super().shorthand
-            + f"soa{self.soa_ticks}"
-            + f"oa{self.object_activation}"
+            super().shorthand + "_"
+            + f"soa{self.soa_ticks}_"
+            + f"oa{self.object_activation}_"
             + f"dur{self.incremental_activation_duration}"
         )
 

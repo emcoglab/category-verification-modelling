@@ -1,5 +1,6 @@
 -r framework/cognitive_model/requirements.txt
 -r framework/data/requirements.txt
+matplotlib
 numpy
 pandas
 seaborn
