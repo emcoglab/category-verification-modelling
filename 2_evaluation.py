@@ -48,12 +48,15 @@ _n_thresholds = 10
 THRESHOLDS = [i / _n_thresholds for i in range(_n_thresholds + 1)]  # linspace was causing weird float rounding errors
 
 
-def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restrict_to_answerable_items: bool, overwrite: bool):
+def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool, restrict_to_answerable_items: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
         If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
         (CUP - paper cup), the items are excluded from further analysis.
     """
+
+    _logger.info("")
+    _logger.info(f"Spec: {spec_filename}")
 
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
     if not model_output_dir.exists():
@@ -134,11 +137,6 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
     save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col=ColNames.Criterion_loglinear, vlims=(None, None))
     save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria difference.png"), value_col=f"{ColNames.Criterion_loglinear} absolute difference", vlims=(0, None))
 
-    _logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
-    _logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10 < t[2] < 10)}")
-    _logger.info(f"Participant dprime mean (SD): {participant_dprime_mean} ({participant_dprime_sd})")
-    _logger.info(f"Participant criterion mean (SD): {participant_criterion_mean} ({participant_criterion_sd})")
-
     # Find max suitable dprime
     max_dprime = -inf
     max_no, max_yes = None, None
@@ -150,6 +148,8 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
                 # Remember other params for the best dprime
                 max_no, max_yes = no_th, yes_th
                 max_hitrate, max_criterion = hitrate, criterion
+    _logger.info(f"Participant dprime mean (SD): {participant_dprime_mean} ({participant_dprime_sd})")
+    _logger.info(f"Participant criterion mean (SD): {participant_criterion_mean} ({participant_criterion_sd})")
     _logger.info(f"Best dprime for which criterion is within 1SD of participant mean: {max_dprime} (no={max_no}, yes={max_yes})")
     _logger.info(f'Criterion for this dprime: {max_criterion}')
     _logger.info(f"Hitrate for this dprime: {max_hitrate}")
@@ -162,31 +162,32 @@ if __name__ == '__main__':
     seed(1)  # Reproducible results
 
     loaded_specs = []
-    loaded_specs.extend(CategoryVerificationJobSpec.load_multiple(
-        Path(Path(__file__).parent, "job_specifications", "2021-08-16 educated guesses.yaml")))
-    loaded_specs.extend(CategoryVerificationJobSpec.load_multiple(
-        Path(Path(__file__).parent, "job_specifications", "2021-07-15 40k different decay.yaml")))
-    loaded_specs.extend(CategoryVerificationJobSpec.load_multiple(
-        Path(Path(__file__).parent, "job_specifications", "2021-06-25 search for more sensible parameters.yaml")))
-    loaded_specs.extend(CategoryVerificationJobSpec.load_multiple(
-        Path(Path(__file__).parent, "job_specifications", "2021-09-07 Finer search around a good model.yaml")))
+    for sfn in [
+        "2021-08-16 educated guesses.yaml",
+        "2021-07-15 40k different decay.yaml",
+        "2021-06-25 search for more sensible parameters.yaml",
+        "2021-09-07 Finer search around a good model.yaml",
+    ]:
+        loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
+            Path(Path(__file__).parent, "job_specifications", sfn)))])
 
     systematic_cca_test = False
     if systematic_cca_test:
         ccas = [1.0, 0.5, 0.0]
         specs = []
         s: CategoryVerificationJobSpec
-        for s in loaded_specs:
+        for s, sfn, i in loaded_specs:
             for cca in ccas:
                 spec = deepcopy(s)
                 spec.cross_component_attenuation = cca
-                specs.append(spec)
+                specs.append((spec, sfn, i))
     else:
         specs = loaded_specs
 
-    for i1, spec in enumerate(specs, start=1):
-        _logger.info(f"Evaluating model {i1} of {len(specs)}")
+    for j, (spec, sfn, i) in enumerate(specs, start=1):
+        _logger.info(f"Evaluating model {j} of {len(specs)}")
         main(spec=spec,
+             spec_filename=f"{sfn} [{i}]",
              exclude_repeated_items=True,
              restrict_to_answerable_items=True,
              overwrite=False)
