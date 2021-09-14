@@ -208,7 +208,6 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
 
 def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
                                restrict_to_answerable_items: bool,
-                               exclude_repeated_items: bool,
                                decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
                                loglinear: bool,
                                spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
@@ -231,8 +230,6 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
             model_data = all_model_data[(category_label, object_label)]
         # No model output was saved
         except KeyError:
-            continue
-        if exclude_repeated_items and is_repeated_item(category_label, object_label):
             continue
 
         model_decision: Decision

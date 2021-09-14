@@ -22,6 +22,7 @@ import sys
 from copy import deepcopy
 from logging import getLogger, basicConfig, INFO
 from pathlib import Path
+from typing import Dict, Tuple
 
 from numpy.random import seed
 from pandas import DataFrame
@@ -30,7 +31,7 @@ from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal
-from framework.evaluation.decision import performance_for_thresholds
+from framework.evaluation.decision import performance_for_thresholds, is_repeated_item
 from framework.evaluation.figures import save_heatmap
 from framework.evaluation.load import load_model_output_from_dir
 
@@ -42,7 +43,7 @@ logger_dateformat = "1%Y-%m-%d %H:%M:%S"
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
 
 # Shared
-_n_thresholds = 20
+_n_thresholds = 10
 THRESHOLDS = [i / _n_thresholds for i in range(_n_thresholds + 1)]  # linspace was causing weird float rounding errors
 
 
@@ -67,10 +68,17 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
     save_dir.mkdir(parents=False, exist_ok=True)
 
     try:
-        all_model_data = load_model_output_from_dir(model_output_dir)
+        all_model_data: Dict[Tuple[str, str], DataFrame] = load_model_output_from_dir(model_output_dir)
     except FileNotFoundError:
         _logger.warning(f"No model data in {model_output_dir.as_posix()}")
         return
+
+    if exclude_repeated_items:
+        all_model_data = {
+            category_item_pair: data
+            for category_item_pair, data in all_model_data.items()
+            if not is_repeated_item(*category_item_pair)
+        }
 
     hitrates = []
     dprimes = []
@@ -85,7 +93,6 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
             hitrate, dprime, criterion = performance_for_thresholds(
                 all_model_data=all_model_data,
                 restrict_to_answerable_items=restrict_to_answerable_items,
-                exclude_repeated_items=exclude_repeated_items,
                 decision_threshold_yes=decision_threshold_yes,
                 decision_threshold_no=decision_threshold_no,
                 loglinear=True,
@@ -98,13 +105,18 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
 
     filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
 
+    items_subset = list(all_model_data.keys()) if restrict_to_answerable_items else None
+
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
         dprimes,
         columns=["Decision threshold (no)", "Decision threshold (yes)", ColNames.DPrime_loglinear])
     with Path(save_dir, f"{filename_prefix} dprimes.csv").open("w") as f:
         dprimes_df.to_csv(f, header=True, index=False)
-    dprimes_df[f"{ColNames.DPrime_loglinear} absolute difference"] = abs(CategoryVerificationParticipantOriginal().summarise_dataframe()[ColNames.DPrime_loglinear].mean() - dprimes_df[ColNames.DPrime_loglinear])
+    dprimes_df[f"{ColNames.DPrime_loglinear} absolute difference"] = abs(
+        CategoryVerificationParticipantOriginal()
+        .summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].mean()
+        - dprimes_df[ColNames.DPrime_loglinear])
     save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes.png"), value_col=ColNames.DPrime_loglinear, vlims=(None, None))
     save_heatmap(dprimes_df, Path(save_dir, f"{filename_prefix} dprimes difference.png"), value_col=f"{ColNames.DPrime_loglinear} absolute difference", vlims=(0, None))
 
@@ -115,12 +127,18 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool, restri
     with Path(save_dir, f"{filename_prefix} criteria.csv").open("w") as f:
         criteria_df.to_csv(f, header=True, index=False)
     # Difference to subject-average criterion
-    criteria_df[f"{ColNames.Criterion_loglinear} absolute difference"] = abs(CategoryVerificationParticipantOriginal().summarise_dataframe()[ColNames.Criterion_loglinear].mean() - criteria_df[ColNames.Criterion_loglinear])
+    criteria_df[f"{ColNames.Criterion_loglinear} absolute difference"] = abs(
+        CategoryVerificationParticipantOriginal()
+        .summarise_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].mean()
+        - criteria_df[ColNames.Criterion_loglinear])
     save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria.png"), value_col=ColNames.Criterion_loglinear, vlims=(None, None))
     save_heatmap(criteria_df, Path(save_dir, f"{filename_prefix} criteria difference.png"), value_col=f"{ColNames.Criterion_loglinear} absolute difference", vlims=(0, None))
 
     _logger.info(f"Largest hitrate this model: {max(t[2] for t in hitrates)}")
     _logger.info(f"Largest dprime this model: {max(t[2] for t in dprimes if -10 < t[2] < 10)}")
+    _logger.info(f"Participant dprime mean (SD):"
+                 f" {CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].mean()}"
+                 f" ({CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].std()})")
 
 
 if __name__ == '__main__':
