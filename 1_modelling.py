@@ -30,7 +30,7 @@ from framework.cognitive_model.basic_types import ActivationValue, Length, Compo
 from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.events import ItemEnteredBufferEvent
-from framework.cognitive_model.graph_propagator import Guard
+from framework.cognitive_model.guards import just_no_guard
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_components import LinguisticComponent
@@ -143,12 +143,6 @@ def main(job_spec: CategoryVerificationJobSpec):
     job_spec.save(in_location=response_dir)
     model.mapping.save_to(directory=response_dir)
 
-    # Make all activation after SOA to be non-propagating
-    t = model.clock  # This guard will be executed part-way-through a tick, when model.clock will be in an inconsistent state. So freeze it here first.
-    _pre_soa: Guard = lambda idx, activation: t < job_spec.soa_ticks
-    model.linguistic_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
-    model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
-
     # Stimuli are the same for both datasets so it doesn't matter which we use here
     cv_item_data = CategoryVerificationItemData()
 
@@ -224,8 +218,17 @@ def main(job_spec: CategoryVerificationJobSpec):
                     break
             if back_out:
                 break
+
             # Do the actual incremental activation
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
+
+                # In order to stop incremetal activation from generating a million impulses, from this point on all
+                # activations become non-propagating
+                if model.clock == job_spec.soa_ticks:
+                    logger.info("Further activations will be non-propagating")
+                    model.linguistic_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
+                    model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
+
                 # Activate sensorimotor item directly
                 _activate_sensorimotor_item(
                     label=object_label_sensorimotor,
