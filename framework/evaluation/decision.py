@@ -196,7 +196,7 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
                 for part in object_label_linguistic_multiword_parts
             ])
 
-        # Return decision when made
+        # Return decision when made: either component can make either decision
         if sensorimotor_decision.made:
             return sensorimotor_decision, tick, Component.sensorimotor
         for decision in linguistic_decisions:
