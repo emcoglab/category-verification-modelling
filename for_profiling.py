@@ -37,7 +37,6 @@ from framework.cognitive_model.basic_types import ActivationValue, Component
 from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.events import ItemEnteredBufferEvent
-from framework.cognitive_model.graph_propagator import Guard
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_components import LinguisticComponent
@@ -49,7 +48,6 @@ from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import Sens
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
-from framework.data.category_verification_data import CategoryVerificationItemData
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
@@ -150,15 +148,6 @@ def main(job_spec: CategoryVerificationJobSpec):
     )
     job_spec.save(in_location=response_dir)
     model.mapping.save_to(directory=response_dir)
-
-    # Make all activation after SOA to be non-propagating
-    t = model.clock  # This guard will be executed part-way-through a tick, when model.clock will be in an inconsistent state. So freeze it here first.
-    _pre_soa: Guard = lambda idx, activation: t < job_spec.soa_ticks
-    model.linguistic_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
-    model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
-
-    # Stimuli are the same for both datasets so it doesn't matter which we use here
-    cv_item_data = CategoryVerificationItemData()
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
 
@@ -311,7 +300,6 @@ if __name__ == '__main__':
                 pruning_type=None,
                 bailout=20_000,
                 run_for_ticks=rft,
-                impulse_pruning_threshold=0.05,
             ),
             sensorimotor_spec=SensorimotorPropagationJobSpec(
                 accessible_set_threshold=0.4,

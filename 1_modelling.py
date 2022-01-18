@@ -38,7 +38,7 @@ from framework.cognitive_model.basic_types import ActivationValue, Length, Compo
 from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.events import ItemEnteredBufferEvent
-from framework.cognitive_model.graph_propagator import Guard
+from framework.cognitive_model.guards import just_no_guard
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.linguistic_components import LinguisticComponent
@@ -46,7 +46,6 @@ from framework.cognitive_model.preferences.preferences import Preferences
 from framework.cognitive_model.sensorimotor_components import SensorimotorComponent
 from framework.cognitive_model.sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng
 from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNormsError
-from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
@@ -54,9 +53,6 @@ from framework.data.category_verification_data import CategoryVerificationItemDa
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
-
-# Shared
-_SN = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
 
 
 def _get_best_sensorimotor_translation(sensorimotor_component: SensorimotorComponent, w: str) -> Optional[str]:
@@ -155,12 +151,6 @@ def main(job_spec: CategoryVerificationJobSpec):
     job_spec.save(in_location=response_dir)
     model.mapping.save_to(directory=response_dir)
 
-    # Make all activation after SOA to be non-propagating
-    t = model.clock  # This guard will be executed part-way-through a tick, when model.clock will be in an inconsistent state. So freeze it here first.
-    _pre_soa: Guard = lambda idx, activation: t < job_spec.soa_ticks
-    model.linguistic_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
-    model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(_pre_soa)
-
     # Stimuli are the same for both datasets so it doesn't matter which we use here
     cv_item_data = CategoryVerificationItemData()
 
@@ -195,7 +185,8 @@ def main(job_spec: CategoryVerificationJobSpec):
         object_prevalence: float
         try:
             object_prevalence = scale_prevalence_01(
-                prevalence_from_fraction_known(_SN.fraction_known(object_label_sensorimotor)))
+                prevalence_from_fraction_known(model.sensorimotor_component.sensorimotor_norms
+                                               .fraction_known(object_label_sensorimotor)))
         except WordNotInNormsError:
             # In case the word isn't in the norms, make that known, but fall back to full prevalence
             object_prevalence = 1.0
@@ -235,8 +226,17 @@ def main(job_spec: CategoryVerificationJobSpec):
                     break
             if back_out:
                 break
+
             # Do the actual incremental activation
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
+
+                # In order to stop incremetal activation from generating a million impulses, from this point on all
+                # activations become non-propagating
+                if model.clock == job_spec.soa_ticks:
+                    logger.info("Further activations will be non-propagating")
+                    model.linguistic_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
+                    model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
+
                 # Activate sensorimotor item directly
                 _activate_sensorimotor_item(
                     label=object_label_sensorimotor,
@@ -297,7 +297,6 @@ if __name__ == '__main__':
     parser.add_argument("--linguistic_use_activation_cap", action="store_true")
     parser.add_argument("--linguistic_corpus_name", required=True, type=str)
     parser.add_argument("--linguistic_firing_threshold", required=True, type=ActivationValue)
-    parser.add_argument("--linguistic_impulse_pruning_threshold", required=True, type=ActivationValue)
     parser.add_argument("--linguistic_length_factor", required=True, type=int)
     parser.add_argument("--linguistic_model_name", required=True, type=str)
     parser.add_argument("--linguistic_node_decay_factor", required=True, type=float)
@@ -345,7 +344,6 @@ if __name__ == '__main__':
                 use_activation_cap=args.linguistic_use_activation_cap,
                 corpus_name=args.linguistic_corpus_name,
                 firing_threshold=args.linguistic_firing_threshold,
-                impulse_pruning_threshold=args.linguistic_impulse_pruning_threshold,
                 length_factor=args.linguistic_length_factor,
                 model_name=args.linguistic_model_name,
                 node_decay_factor=args.linguistic_node_decay_factor,
@@ -367,7 +365,7 @@ if __name__ == '__main__':
                 node_decay_sigma=args.sensorimotor_node_decay_sigma,
                 attenuation_statistic=AttenuationStatistic.from_slug(args.sensorimotor_attenuation),
                 max_radius=args.sensorimotor_max_sphere_radius,
-                use_breng_translation=True,
+                use_breng_translation=True,  # Always use the BrEng translation in the interactive model
                 bailout=args.bailout,
                 run_for_ticks=args.run_for_ticks,
             ),
