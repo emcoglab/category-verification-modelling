@@ -38,7 +38,6 @@ from framework.cognitive_model.preferences.preferences import Preferences
 from framework.cognitive_model.sensorimotor_components import SensorimotorComponent
 from framework.cognitive_model.sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng
 from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNormsError
-from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
@@ -46,9 +45,6 @@ from framework.data.category_verification_data import CategoryVerificationItemDa
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
-
-# Shared
-_SN = SensorimotorNorms(use_breng_translation=True)  # Always use the BrEng translation in the interactive model
 
 
 def _get_best_sensorimotor_translation(sensorimotor_component: SensorimotorComponent, w: str) -> Optional[str]:
@@ -187,7 +183,8 @@ def main(job_spec: CategoryVerificationJobSpec):
         object_prevalence: float
         try:
             object_prevalence = scale_prevalence_01(
-                prevalence_from_fraction_known(_SN.fraction_known(object_label_sensorimotor)))
+                prevalence_from_fraction_known(model.sensorimotor_component.sensorimotor_norms
+                                               .fraction_known(object_label_sensorimotor)))
         except WordNotInNormsError:
             # In case the word isn't in the norms, make that known, but fall back to full prevalence
             object_prevalence = 1.0
@@ -359,7 +356,7 @@ if __name__ == '__main__':
                 node_decay_sigma=args.sensorimotor_node_decay_sigma,
                 attenuation_statistic=AttenuationStatistic.from_slug(args.sensorimotor_attenuation),
                 max_radius=args.sensorimotor_max_sphere_radius,
-                use_breng_translation=True,
+                use_breng_translation=True,  # Always use the BrEng translation in the interactive model
                 bailout=args.bailout,
                 run_for_ticks=args.run_for_ticks,
             ),
