@@ -377,7 +377,6 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
     accessible_set_threshold: float
     accessible_set_capacity: Optional[int]
     use_activation_cap: bool
-    impulse_pruning_threshold: ActivationValue
     pruning_type: Optional[EdgePruningType]
     pruning: Optional[int]
     distance_type: Optional[DistanceType] = None
@@ -393,7 +392,6 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             f"--edge_decay_sd {self.edge_decay_sd}",
             f"--node_decay_factor {self.node_decay_factor}",
             f"--accessible_set_threshold {self.accessible_set_threshold}",
-            f"--impulse_pruning_threshold {self.impulse_pruning_threshold}",
         ]
         if self.accessible_set_capacity is not None:
             args.append(f"--accessible_set_capacity {self.accessible_set_capacity}")
@@ -457,7 +455,6 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             f" as-θ {self.accessible_set_threshold};"
             f" as-cap {self.accessible_set_capacity};"
             f"{cap_string}"
-            f" imp-prune-θ {self.impulse_pruning_threshold};"
             f" run-for {self.run_for_ticks};"
             f" bail {self.bailout}",
         )
@@ -475,7 +472,6 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             "Accessible set threshold": str(self.accessible_set_threshold),
             "Accessible set capacity": str(self.accessible_set_capacity),
             "Firing threshold": str(self.firing_threshold),
-            "Impulse pruning threshold": str(self.impulse_pruning_threshold),
             "Use activation cap": str(self.use_activation_cap)
         })
         if self.distance_type is not None:
@@ -505,7 +501,6 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
             node_decay_factor        =float(dictionary["Node decay"]),
             accessible_set_capacity  =int(dictionary["Accessible set capacity"]) if dictionary["Accessible set capacity"] != 'None' else None,
             accessible_set_threshold =ActivationValue(dictionary["Accessible set threshold"]),
-            impulse_pruning_threshold=ActivationValue(dictionary["Impulse pruning threshold"]),
             pruning_type             =EdgePruningType.from_name(dictionary["Pruning type"]) if "Pruning type" in dictionary else None,
             pruning                  =int(dictionary["Pruning"]) if "Pruning" in dictionary else None,
             use_activation_cap       =bool(dictionary["Use activation cap"]) if "Use activation cap" in dictionary else False,

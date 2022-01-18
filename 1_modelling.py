@@ -289,7 +289,6 @@ if __name__ == '__main__':
     parser.add_argument("--linguistic_use_activation_cap", action="store_true")
     parser.add_argument("--linguistic_corpus_name", required=True, type=str)
     parser.add_argument("--linguistic_firing_threshold", required=True, type=ActivationValue)
-    parser.add_argument("--linguistic_impulse_pruning_threshold", required=True, type=ActivationValue)
     parser.add_argument("--linguistic_length_factor", required=True, type=int)
     parser.add_argument("--linguistic_model_name", required=True, type=str)
     parser.add_argument("--linguistic_node_decay_factor", required=True, type=float)
@@ -337,7 +336,6 @@ if __name__ == '__main__':
                 use_activation_cap=args.linguistic_use_activation_cap,
                 corpus_name=args.linguistic_corpus_name,
                 firing_threshold=args.linguistic_firing_threshold,
-                impulse_pruning_threshold=args.linguistic_impulse_pruning_threshold,
                 length_factor=args.linguistic_length_factor,
                 model_name=args.linguistic_model_name,
                 node_decay_factor=args.linguistic_node_decay_factor,

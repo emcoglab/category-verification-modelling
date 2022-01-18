@@ -292,7 +292,6 @@ if __name__ == '__main__':
                 pruning_type=None,
                 bailout=20_000,
                 run_for_ticks=rft,
-                impulse_pruning_threshold=0.05,
             ),
             sensorimotor_spec=SensorimotorPropagationJobSpec(
                 accessible_set_threshold=0.4,
