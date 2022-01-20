@@ -186,6 +186,11 @@ def main(job_spec: CategoryVerificationJobSpec):
             logger.warning(f"\tUsing a default of {object_prevalence} instead.")
 
         model.reset()
+        # Remove any guards which may have been added
+        if model.linguistic_component.propagator.postsynaptic_guards[0] == just_no_guard:
+            model.linguistic_component.propagator.postsynaptic_guards.popleft()
+        if model.sensorimotor_component.propagator.postsynaptic_guards[0] == just_no_guard:
+            model.sensorimotor_component.propagator.postsynaptic_guards.popleft()
 
         # Activate the initial category label in the linguistic component only
         try:
