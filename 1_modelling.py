@@ -205,7 +205,7 @@ def main(job_spec: CategoryVerificationJobSpec):
         # Start the clock
         activation_tracking_data = []
         buffer_entries = []
-        back_out: bool = False  # Yes, this is ugly and fragile, but since Python doesn't have named loops I can't find a more readable way to do it.
+        abort_item: bool = False  # Yes, this is ugly and fragile, but since Python doesn't have named loops I can't find a more readable way to do it.
         while model.clock <= job_spec.run_for_ticks:
 
             # Apply incremental activation during the immediate post-SOA period in both components
@@ -213,21 +213,21 @@ def main(job_spec: CategoryVerificationJobSpec):
             if object_label_sensorimotor not in model.sensorimotor_component.available_labels:
                 logger.error(f"Missing sensorimotor item for object: {object_label} ({object_label_sensorimotor})")
                 # Missing item, can make no sensible prediction
-                back_out = True
+                abort_item = True
                 break
             for part in object_label_linguistic_multiword_parts:
                 if part not in model.linguistic_component.available_labels:
                     logger.error(f"Missing linguistic items for object: {object_label} ({object_label_linguistic})")
                     # Missing item, can make no sensible prediction
-                    back_out = True
+                    abort_item = True
                     break
-            if back_out:
+            if abort_item:
                 break
 
             # Do the actual incremental activation
             if job_spec.soa_ticks <= model.clock < job_spec.soa_ticks + job_spec.incremental_activation_duration:
 
-                # In order to stop incremetal activation from generating a million impulses, from this point on all
+                # In order to stop incremental activation from generating a million impulses, from this point on all
                 # activations become non-propagating
                 if model.clock == job_spec.soa_ticks:
                     logger.info("Further activations will be non-propagating")
@@ -272,7 +272,7 @@ def main(job_spec: CategoryVerificationJobSpec):
                                             category_label_linguistic_multiword_parts, category_label_sensorimotor,
                                             object_label_linguistic_multiword_parts, object_label_sensorimotor))
 
-        if back_out:
+        if abort_item:
             continue
 
         with activation_tracking_path.open("w") as file:
