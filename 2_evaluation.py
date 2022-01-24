@@ -84,7 +84,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
             if not is_repeated_item(*category_item_pair)
         }
 
-    hitrates = []
+    correct_rates = []
     dprimes = []
     criteria = []
     threshold_i = 0
@@ -94,14 +94,14 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 continue
             threshold_i += 1
 
-            hitrate, dprime, criterion = performance_for_thresholds(
+            correct_rate, dprime, criterion = performance_for_thresholds(
                 all_model_data=all_model_data,
                 restrict_to_answerable_items=restrict_to_answerable_items,
                 decision_threshold_yes=decision_threshold_yes,
                 decision_threshold_no=decision_threshold_no,
                 loglinear=True,
                 spec=spec, save_dir=Path(save_dir, "hitrates by threshold"))
-            hitrates.append((decision_threshold_no, decision_threshold_yes, hitrate))
+            correct_rates.append((decision_threshold_no, decision_threshold_yes, correct_rate))
             dprimes.append((decision_threshold_no, decision_threshold_yes, dprime))
             criteria.append((decision_threshold_no, decision_threshold_yes, criterion))
 
@@ -140,19 +140,23 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     # Find max suitable dprime
     max_dprime = -inf
     max_no, max_yes = None, None
-    max_hitrate, max_criterion = None, None
-    for (no_th, yes_th, dprime), (_, _, criterion), (_, _, hitrate) in zip(dprimes, criteria, hitrates):
+    correct_rate_for_max_dprime, criterion_for_max_dprime = None, None
+    max_correct_rate = -inf
+    for (no_th, yes_th, dprime), (_, _, criterion), (_, _, correct_rate) in zip(dprimes, criteria, correct_rates):
         if participant_criterion_mean - participant_criterion_sd <= criterion <= participant_criterion_mean + participant_criterion_sd:
             if dprime > max_dprime:
                 max_dprime = dprime
                 # Remember other params for the best dprime
                 max_no, max_yes = no_th, yes_th
-                max_hitrate, max_criterion = hitrate, criterion
+                correct_rate_for_max_dprime, criterion_for_max_dprime = correct_rate, criterion
+            if correct_rate > max_correct_rate:
+                max_correct_rate = correct_rate
     _logger.info(f"Participant dprime mean (SD): {participant_dprime_mean} ({participant_dprime_sd})")
     _logger.info(f"Participant criterion mean (SD): {participant_criterion_mean} ({participant_criterion_sd})")
     _logger.info(f"Best dprime for which criterion is within 1SD of participant mean: {max_dprime} (no={max_no}, yes={max_yes})")
-    _logger.info(f'Criterion for this dprime: {max_criterion}')
-    _logger.info(f"Hitrate for this dprime: {max_hitrate}")
+    _logger.info(f'Criterion for this dprime: {criterion_for_max_dprime}')
+    _logger.info(f"Correct-rate for this dprime: {correct_rate_for_max_dprime}")
+    _logger.info(f"Best correct rate overall: {max_correct_rate}")
 
 
 if __name__ == '__main__':
@@ -163,11 +167,11 @@ if __name__ == '__main__':
 
     loaded_specs = []
     for sfn in [
-        "2021-08-16 educated guesses.yaml",
-        "2021-07-15 40k different decay.yaml",
-        "2021-06-25 search for more sensible parameters.yaml",
-        "2021-09-07 Finer search around a good model.yaml",
-        "2021-09-14 Finer search around another good model.yaml",
+        # "2021-08-16 educated guesses.yaml",
+        # "2021-07-15 40k different decay.yaml",
+        # "2021-06-25 search for more sensible parameters.yaml",
+        # "2021-09-07 Finer search around a good model.yaml",
+        # "2021-09-14 Finer search around another good model.yaml",
         "2022-01-24 More variations on the current favourite.yaml",
     ]:
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
@@ -192,6 +196,6 @@ if __name__ == '__main__':
              spec_filename=f"{sfn} [{i}]",
              exclude_repeated_items=True,
              restrict_to_answerable_items=True,
-             overwrite=False)
+             overwrite=True)
 
     _logger.info("Done!")

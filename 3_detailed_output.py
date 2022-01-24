@@ -155,11 +155,11 @@ if __name__ == '__main__':
     seed(1)  # Reproducible results
 
     spec = CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent, "job_specifications",
-                                                          "2021-09-14 Finer search around another good model.yaml"))[0]
+                                                          "2022-01-24 More variations on the current favourite.yaml"))[0]
 
     main(spec=spec,
          decision_threshold_yes=0.4,
-         decision_threshold_no=0.3,
+         decision_threshold_no=0.2,
          exclude_repeated_items=True,
          overwrite=True)
 
