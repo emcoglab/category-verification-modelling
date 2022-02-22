@@ -111,10 +111,10 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     items_subset = list(all_model_data.keys()) if restrict_to_answerable_items else None
 
-    participant_dprime_mean    = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].mean()
-    participant_dprime_sd      = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].std()
-    participant_criterion_mean = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].mean()
-    participant_criterion_sd   = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].std()
+    participant_dprime_mean    = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].mean()
+    participant_dprime_sd      = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].std()
+    participant_criterion_mean = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].mean()
+    participant_criterion_sd   = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].std()
 
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
