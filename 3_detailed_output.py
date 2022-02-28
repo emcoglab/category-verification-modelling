@@ -127,8 +127,7 @@ def plot_object_activation_traces(spec: CategoryVerificationJobSpec,
 
 def categorise_errors(spec: CategoryVerificationJobSpec,
                       all_model_data: Dict[CategoryObjectPair, DataFrame],
-                      decision_threshold_yes: float, decision_threshold_no: float,
-                      save_dir: Path):
+                      decision_threshold_yes: float, decision_threshold_no: float):
     """
     Categories the model's correct and incorrect guesses by the type of the stimulus
     """
@@ -201,7 +200,7 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
 
     plot_object_activation_traces(spec, all_model_data, decision_threshold_yes, decision_threshold_no, save_dir)
 
-    categorise_errors(spec, all_model_data, decision_threshold_yes, decision_threshold_no, save_dir)
+    categorise_errors(spec, all_model_data, decision_threshold_yes, decision_threshold_no)
 
 
 if __name__ == '__main__':
