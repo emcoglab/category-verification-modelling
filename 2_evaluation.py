@@ -22,7 +22,7 @@ import sys
 from copy import deepcopy
 from logging import getLogger, basicConfig, INFO
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, List
 
 from numpy import inf
 from numpy.random import seed
@@ -31,8 +31,9 @@ from pandas import DataFrame
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.version import VERSION
-from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal
-from framework.evaluation.decision import performance_for_thresholds, is_repeated_item
+from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal, \
+    CategoryObjectPair
+from framework.evaluation.decision import performance_for_thresholds
 from framework.evaluation.figures import save_heatmap
 from framework.evaluation.load import load_model_output_from_dir
 
@@ -72,17 +73,10 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     save_dir.mkdir(parents=False, exist_ok=True)
 
     try:
-        all_model_data: Dict[Tuple[str, str], DataFrame] = load_model_output_from_dir(model_output_dir)
+        all_model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, exclude_repeated_items=exclude_repeated_items)
     except FileNotFoundError:
         _logger.warning(f"No model data in {model_output_dir.as_posix()}")
         return
-
-    if exclude_repeated_items:
-        all_model_data = {
-            category_item_pair: data
-            for category_item_pair, data in all_model_data.items()
-            if not is_repeated_item(*category_item_pair)
-        }
 
     correct_rates = []
     dprimes = []
@@ -109,12 +103,12 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
 
-    items_subset = list(all_model_data.keys()) if restrict_to_answerable_items else None
+    items_subset: List[CategoryObjectPair] = list(all_model_data.keys()) if restrict_to_answerable_items else None
 
-    participant_dprime_mean    = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].mean()
-    participant_dprime_sd      = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].std()
-    participant_criterion_mean = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].mean()
-    participant_criterion_sd   = CategoryVerificationParticipantOriginal().summarise_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].std()
+    participant_dprime_mean    = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].mean()
+    participant_dprime_sd      = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.DPrime_loglinear].std()
+    participant_criterion_mean = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].mean()
+    participant_criterion_sd   = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.Criterion_loglinear].std()
 
     # Save overall dprimes
     dprimes_df = DataFrame.from_records(
