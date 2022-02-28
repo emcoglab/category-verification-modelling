@@ -166,6 +166,26 @@ def categorise_errors(spec: CategoryVerificationJobSpec,
     _logger.info(f"Probability of model error on subordinate items: {probability_error_subordinate}")
 
 
+def categorise_celerity(spec: CategoryVerificationJobSpec,
+                        all_model_data: Dict[CategoryObjectPair, DataFrame],
+                        decision_threshold_yes: float, decision_threshold_no: float):
+    """
+    Categories the model's quick and slow judgements
+    """
+
+    model_guesses_df = make_all_model_decisions(all_model_data, decision_threshold_yes, decision_threshold_no, spec)
+
+    # Add taxonomic level for all items
+    model_guesses_df = model_guesses_df.merge(
+        CategoryVerificationItemData().dataframe[[
+            ColNames.CategoryLabel, ColNames.ImageObject,
+            # New columns to include
+            ColNames.TaxonomicLevel, ColNames.EasyHardToReject,
+        ]],
+        on=[ColNames.CategoryLabel, ColNames.ImageObject],
+        how="left")
+
+
 def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decision_threshold_no: float,
          exclude_repeated_items: bool, overwrite: bool):
     """
