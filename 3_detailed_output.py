@@ -34,7 +34,7 @@ from framework.data.category_verification_data import CategoryVerificationPartic
     CategoryVerificationItemData, CategoryObjectPair, ColNames
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
-from framework.evaluation.decision import make_model_decision, Outcome, make_all_model_decisions
+from framework.evaluation.decision import make_model_decision, Outcome, make_all_model_decisions, DecisionColNames
 from framework.evaluation.load import load_model_output_from_dir
 
 _logger = getLogger(__name__)
@@ -152,13 +152,12 @@ def categorise_errors(spec: CategoryVerificationJobSpec,
     basic_guesses         = model_guesses_df[model_guesses_df[ColNames.TaxonomicLevel] == "basic"]
     subordinate_guesses   = model_guesses_df[model_guesses_df[ColNames.TaxonomicLevel] == "subordinate"]
 
-    # TODO: factor out this magic value
-    probability_error_easy = len(easy_guesses[easy_guesses["Model is correct"] == False]) / len(easy_guesses)
-    probability_error_hard = len(hard_guesses[hard_guesses["Model is correct"] == False]) / len(hard_guesses)
+    probability_error_easy = len(easy_guesses[easy_guesses[DecisionColNames.ModelIsCorrect] == False]) / len(easy_guesses)
+    probability_error_hard = len(hard_guesses[hard_guesses[DecisionColNames.ModelIsCorrect] == False]) / len(hard_guesses)
 
-    probability_error_superordinate = len(superordinate_guesses[superordinate_guesses["Model is correct"] == False]) / len(superordinate_guesses)
-    probability_error_basic         = len(basic_guesses[basic_guesses["Model is correct"] == False]) / len(basic_guesses)
-    probability_error_subordinate   = len(subordinate_guesses[subordinate_guesses["Model is correct"] == False]) / len(subordinate_guesses)
+    probability_error_superordinate = len(superordinate_guesses[superordinate_guesses[DecisionColNames.ModelIsCorrect] == False]) / len(superordinate_guesses)
+    probability_error_basic         = len(basic_guesses[basic_guesses[DecisionColNames.ModelIsCorrect] == False]) / len(basic_guesses)
+    probability_error_subordinate   = len(subordinate_guesses[subordinate_guesses[DecisionColNames.ModelIsCorrect] == False]) / len(subordinate_guesses)
 
     _logger.info(f"Probability of model error on easy items: {probability_error_easy}")
     _logger.info(f"Probability of model error on hard items: {probability_error_hard}")

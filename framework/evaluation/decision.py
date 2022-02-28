@@ -176,6 +176,14 @@ class _Decider:
         return decisions
 
 
+class DecisionColNames:
+    """Additional ColNames for model decision data"""
+    ModelDecision: str  = "Model decision"
+    DecisionTime: str   = "Decision made at time"
+    ModelOutcome: str   = "Model outcome"
+    ModelIsCorrect: str = "Model is correct",
+
+
 def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int, Optional[Component]]:
     """Make a decision for this object label."""
 
@@ -239,8 +247,8 @@ def make_all_model_decisions(all_model_data, decision_threshold_yes, decision_th
     model_guesses_df: DataFrame = DataFrame.from_records(model_guesses, columns=[
         ColNames.CategoryLabel, ColNames.ImageObject,
         ColNames.ShouldBeVerified,
-        "Model decision", "Decision made at time",
-        "Model outcome", "Model is correct",
+        DecisionColNames.ModelDecision, DecisionColNames.DecisionTime,
+        DecisionColNames.ModelOutcome, DecisionColNames.ModelIsCorrect,
     ])
     return model_guesses_df
 
@@ -261,13 +269,13 @@ def performance_for_thresholds(all_model_data: Dict[CategoryObjectPair, DataFram
     model_guesses_df = make_all_model_decisions(all_model_data, decision_threshold_yes, decision_threshold_no, spec)
 
     # Format columns
-    model_guesses_df["Decision made at time"] = model_guesses_df["Decision made at time"].astype('Int64')
+    model_guesses_df[DecisionColNames.DecisionTime] = model_guesses_df[DecisionColNames.DecisionTime].astype('Int64')
 
     results_dataframe = ground_truth_dataframe.merge(model_guesses_df[[
         ColNames.CategoryLabel, ColNames.ImageObject,
         # Exclude ColNames.ShouldBeVerified so we don't get duplicated columns on the merge
-        "Model decision", "Decision made at time",
-        "Model outcome", "Model is correct",
+        DecisionColNames.ModelDecision, DecisionColNames.DecisionTime,
+        DecisionColNames.ModelOutcome, DecisionColNames.ModelIsCorrect,
     ]], how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
 
     # Save individual threshold data for verification
@@ -275,9 +283,9 @@ def performance_for_thresholds(all_model_data: Dict[CategoryObjectPair, DataFram
     with Path(save_dir, f"no{decision_threshold_no}_yes{decision_threshold_yes}.csv").open("w") as f:
         results_dataframe.to_csv(f, header=True, index=False)
 
-    model_hit_count = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.Hit.name])
-    model_fa_count = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.FalseAlarm.name])
-    model_correct_count = len(model_guesses_df[model_guesses_df["Model is correct"] == True])
+    model_hit_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelOutcome] == Outcome.Hit.name])
+    model_fa_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelOutcome] == Outcome.FalseAlarm.name])
+    model_correct_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelIsCorrect] == True])
 
     if restrict_to_answerable_items:
         # Rates computed as a proportion of trials on which the model can decide
