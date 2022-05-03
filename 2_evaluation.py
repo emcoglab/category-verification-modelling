@@ -33,7 +33,7 @@ from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal, \
     CategoryObjectPair
-from framework.evaluation.decision import performance_for_thresholds
+from framework.evaluation.decision import performance_for_two_thresholds
 from framework.evaluation.figures import save_heatmap
 from framework.evaluation.load import load_model_output_from_dir
 
@@ -88,7 +88,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 continue
             threshold_i += 1
 
-            correct_rate, dprime, criterion = performance_for_thresholds(
+            correct_rate, dprime, criterion = performance_for_two_thresholds(
                 all_model_data=all_model_data,
                 restrict_to_answerable_items=restrict_to_answerable_items,
                 decision_threshold_yes=decision_threshold_yes,

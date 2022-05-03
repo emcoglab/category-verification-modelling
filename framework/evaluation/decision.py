@@ -17,6 +17,8 @@ caiwingfield.net
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+
 from enum import Enum, auto
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
@@ -103,38 +105,86 @@ class Decision(Enum):
         return False
 
 
-class _Decider:
+class _ThresholdDecider(ABC):
     """
-    Test a level of activation against an upper and lower threshold.
+    Test a level of activation against threshold(s).
     Remembers the most recent test to inform the first time a decision is reached.
     """
+    def __init__(self):
+        self.last_decision: Decision = Decision.Waiting
+
+    @abstractmethod
+    def _make_decision(self, activation):
+        """The current decision, based on the current level of activation."""
+        pass
+
+    @staticmethod
+    def _above_threshold(activation: ActivationValue, threshold: ActivationValue) -> bool:
+        """True when activation is above the yes threshold."""
+        # In case the threshold is equal to the activation cap (i.e. FULL_ACTIVATION), floating-point arithmetic means
+        # we may never reach it. Therefore in this instance alone we reduce the threshold minutely when testing for
+        # aboveness.
+        if threshold == FULL_ACTIVATION:
+            return activation >= threshold - 1e-10
+        else:
+            return activation >= threshold
+
+    @staticmethod
+    def _below_threshold(activation: ActivationValue, threshold: ActivationValue) -> bool:
+        """True when activation is below the no threshold."""
+        # In case the threshold is equal to zero (i.e. minimum activation), floating-point arithmetic means we may never
+        # reach it. So we raise the threshold minutely in this case only when testing for belowness.
+        if threshold == 0:
+            return activation <= threshold + 1e-10
+        else:
+            return activation <= threshold
+
+    def test_activation_level(self, activation: ActivationValue) -> Decision:
+        """Present a level of activation to test if it causes a decision to be reached."""
+        decision = self._make_decision(activation)
+        self.last_decision = decision
+        return decision
+
+    @classmethod
+    def multi_tests(cls, deciders: List[_ThresholdDecider], activations: List[ActivationValue]) -> List[Decision]:
+        """
+        Present each activation to each of a list of deciders, and output the decision from each.
+        """
+        assert 0 < len(deciders) == len(activations)
+        decisions = []
+        i: int
+        d: _TwoThresholdDecider
+        for i, d in enumerate(deciders):
+            decision = d.test_activation_level(activations[i])
+            decisions.append(decision)
+        return decisions
+
+
+class _TwoThresholdDecider(_ThresholdDecider):
+    """
+    Test a level of activation against an upper and lower threshold.
+    """
     def __init__(self, threshold_yes: ActivationValue, threshold_no: ActivationValue):
+        super().__init__()
+
         assert threshold_no < threshold_yes
 
         # Threshold for yes and no decisions
         self.threshold_yes: ActivationValue = threshold_yes
         self.threshold_no: ActivationValue = threshold_no
 
-        self.last_decision: Decision = Decision.Waiting
-
-    def _above_yes(self, activation) -> bool:
-        """True whenn activation is above the yes threshold."""
+    def _above_yes(self, activation: ActivationValue) -> bool:
+        """True when activation is above the yes threshold."""
         # In case the threshold is equal to the activation cap (i.e. FULL_ACTIVATION), floating-point arithmetic means
         # we may never reach it. Therefore in this instance alone we reduce the threshold minutely when testing for
         # aboveness.
-        if self.threshold_yes == FULL_ACTIVATION:
-            return activation >= self.threshold_yes - 1e-10
-        else:
-            return activation >= self.threshold_yes
+        return self._above_threshold(activation, threshold=self.threshold_yes)
 
     def _below_no(self, activation) -> bool:
         """True when activation is below the no threshold."""
         # In case the threshold is equal to zero (i.e. minimum activation), floating-point arithmetic means we may never
         # reach it. So we raise the threshold minutely in this case only when testing for belowness.
-        if self.threshold_no == 0:
-            return activation <= self.threshold_no + 1e-10
-        else:
-            return activation <= self.threshold_no
+        return self._below_threshold(activation, threshold=self.threshold_no)
 
     def _make_decision(self, activation) -> Decision:
         """The current decision, based on the current level of activation."""
@@ -155,26 +205,6 @@ class _Decider:
         else:
             raise RuntimeError()
 
-    def test_activation_level(self, activation: ActivationValue) -> Decision:
-        """Present a level of activation to test if it causes a decision to be reached."""
-        decision = self._make_decision(activation)
-        self.last_decision = decision
-        return decision
-
-    @classmethod
-    def multi_tests(cls, deciders: List[_Decider], activations: List[ActivationValue]) -> List[Decision]:
-        """
-        Present each activation to each of a list of deciders, and output the decision from each.
-        """
-        assert 0 < len(deciders) == len(activations)
-        decisions = []
-        i: int
-        d: _Decider
-        for i, d in enumerate(deciders):
-            decision = d.test_activation_level(activations[i])
-            decisions.append(decision)
-        return decisions
-
 
 class DecisionColNames:
     """Additional ColNames for model decision data"""
@@ -184,21 +214,21 @@ class DecisionColNames:
     ModelIsCorrect: str = "Model is correct",
 
 
-def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int, Optional[Component]]:
+def make_model_decision_two_threshold(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int, Optional[Component]]:
     """Make a decision for this object label."""
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
     object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
 
-    sensorimotor_decider = _Decider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
+    sensorimotor_decider = _TwoThresholdDecider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
     linguistic_deciders = [
-        _Decider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
+        _TwoThresholdDecider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
         for _part in object_label_linguistic_multiword_parts
     ]
     for tick in range(spec.soa_ticks + 1, spec.run_for_ticks):
         sensorimotor_decision = sensorimotor_decider.test_activation_level(
             activation=model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[tick])
-        linguistic_decisions = _Decider.multi_tests(
+        linguistic_decisions = _TwoThresholdDecider.multi_tests(
             deciders=linguistic_deciders,
             activations=[
                 model_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].loc[tick]
@@ -215,7 +245,7 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
     return Decision.Undecided, spec.run_for_ticks, None
 
 
-def make_all_model_decisions(all_model_data, decision_threshold_yes, decision_threshold_no, spec) -> DataFrame:
+def make_all_model_decisions_two_thresholds(all_model_data, decision_threshold_yes, decision_threshold_no, spec) -> DataFrame:
     """Make decisions for all stimuli."""
 
     model_guesses = []
@@ -230,7 +260,7 @@ def make_all_model_decisions(all_model_data, decision_threshold_yes, decision_th
 
         model_decision: Decision
         decision_made_at_time: int
-        model_decision, decision_made_at_time, _component = make_model_decision(
+        model_decision, decision_made_at_time, _component = make_model_decision_two_threshold(
             object_label,
             decision_threshold_no, decision_threshold_yes,
             model_data,
@@ -253,11 +283,11 @@ def make_all_model_decisions(all_model_data, decision_threshold_yes, decision_th
     return model_guesses_df
 
 
-def performance_for_thresholds(all_model_data: Dict[CategoryObjectPair, DataFrame],
-                               restrict_to_answerable_items: bool,
-                               decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
-                               loglinear: bool,
-                               spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
+def performance_for_two_thresholds(all_model_data: Dict[CategoryObjectPair, DataFrame],
+                                   restrict_to_answerable_items: bool,
+                                   decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
+                                   loglinear: bool,
+                                   spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
     """
     Returns correct_rate and dprime and criterion.
 
@@ -266,7 +296,7 @@ def performance_for_thresholds(all_model_data: Dict[CategoryObjectPair, DataFram
 
     ground_truth_dataframe = CategoryVerificationItemData().dataframe
 
-    model_guesses_df = make_all_model_decisions(all_model_data, decision_threshold_yes, decision_threshold_no, spec)
+    model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data, decision_threshold_yes, decision_threshold_no, spec)
 
     # Format columns
     model_guesses_df[DecisionColNames.DecisionTime] = model_guesses_df[DecisionColNames.DecisionTime].astype('Int64')
