@@ -1,7 +1,8 @@
 #!/Users/cai/Applications/miniconda3/bin/python
 """
 ===========================
-Evaluating the combined model script for category verification task.
+Evaluating the combined model script for category verification task using the
+two-threshold decision procedure.
 ===========================
 
 Dr. Cai Wingfield
