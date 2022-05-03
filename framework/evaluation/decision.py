@@ -153,11 +153,27 @@ class _ThresholdDecider(ABC):
         assert 0 < len(deciders) == len(activations)
         decisions = []
         i: int
-        d: _TwoThresholdDecider
+        d: _ThresholdDecider
         for i, d in enumerate(deciders):
             decision = d.test_activation_level(activations[i])
             decisions.append(decision)
         return decisions
+
+
+class _OneThresholdDecider(_ThresholdDecider):
+    """
+    Test a level of activation against a threshold.
+    """
+    def __init__(self, threshold: ActivationValue):
+        super().__init__()
+
+        self.threshold: ActivationValue = threshold
+
+    def _make_decision(self, activation) -> Decision:
+        if self._above_threshold(activation, threshold=self.threshold):
+            return Decision.Yes
+        else:
+            return self.last_decision
 
 
 class _TwoThresholdDecider(_ThresholdDecider):
@@ -211,11 +227,44 @@ class DecisionColNames:
     ModelDecision: str  = "Model decision"
     DecisionTime: str   = "Decision made at time"
     ModelOutcome: str   = "Model outcome"
-    ModelIsCorrect: str = "Model is correct",
+    ModelIsCorrect: str = "Model is correct"
+
+
+# TODO: a lot of repeated code here
+def make_model_decision_one_threshold(object_label, decision_threshold, model_data, spec) -> Tuple[Decision, int, Optional[Component]]:
+    """Make a one-threshold decision for this object label."""
+
+    object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
+    object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
+
+    sensorimotor_decider = _OneThresholdDecider(threshold=decision_threshold)
+    linguistic_deciders = [
+        _OneThresholdDecider(threshold=decision_threshold)
+        for _part in object_label_linguistic_multiword_parts
+    ]
+    for tick in range(spec.soa_ticks + 1, spec.run_for_ticks):
+        sensorimotor_decision = sensorimotor_decider.test_activation_level(
+            activation=model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[tick])
+        linguistic_decisions = _TwoThresholdDecider.multi_tests(
+            deciders=linguistic_deciders,
+            activations=[
+                model_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].loc[tick]
+                for part in object_label_linguistic_multiword_parts
+            ])
+
+        # Return decision when made: either component can make either decision
+        if sensorimotor_decision.made:
+            return sensorimotor_decision, tick, Component.sensorimotor
+        for decision in linguistic_decisions:
+            if decision.made:
+                return decision, tick, Component.linguistic
+
+    # If we run out of time, decide no
+    return Decision.No, spec.run_for_ticks, None
 
 
 def make_model_decision_two_threshold(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int, Optional[Component]]:
-    """Make a decision for this object label."""
+    """Make a two-threshold decision for this object label."""
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
     object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
@@ -245,8 +294,51 @@ def make_model_decision_two_threshold(object_label, decision_threshold_no, decis
     return Decision.Undecided, spec.run_for_ticks, None
 
 
-def make_all_model_decisions_two_thresholds(all_model_data, decision_threshold_yes, decision_threshold_no, spec) -> DataFrame:
-    """Make decisions for all stimuli."""
+# TODO: a lot of repeated code here
+def make_all_model_decisions_one_threshold(all_model_data,
+                                           decision_threshold,
+                                           spec) -> DataFrame:
+    """Make one-threshold decisions for all stimuli."""
+
+    model_guesses = []
+    for category_label, object_label in CategoryVerificationItemData().category_object_pairs():
+        item_is_of_category: bool = CategoryVerificationItemData().is_correct(category_label, object_label)
+
+        try:
+            model_data = all_model_data[CategoryObjectPair(category_label, object_label)]
+        # No model output was saved
+        except KeyError:
+            continue
+
+        model_decision: Decision
+        decision_made_at_time: int
+        model_decision, decision_made_at_time, _component = make_model_decision_one_threshold(
+            object_label,
+            decision_threshold,
+            model_data,
+            spec)
+
+        model_outcome: Outcome = Outcome.from_decision(decision=model_decision, should_be_yes=item_is_of_category)
+
+        model_guesses.append((
+            category_label, object_label,
+            item_is_of_category,
+            model_decision, decision_made_at_time,
+            model_outcome.name, model_outcome.is_correct,
+        ))
+    model_guesses_df: DataFrame = DataFrame.from_records(model_guesses, columns=[
+        ColNames.CategoryLabel, ColNames.ImageObject,
+        ColNames.ShouldBeVerified,
+        DecisionColNames.ModelDecision, DecisionColNames.DecisionTime,
+        DecisionColNames.ModelOutcome, DecisionColNames.ModelIsCorrect,
+    ])
+    return model_guesses_df
+
+
+def make_all_model_decisions_two_thresholds(all_model_data,
+                                            decision_threshold_yes, decision_threshold_no,
+                                            spec) -> DataFrame:
+    """Make two-threshold decisions for all stimuli."""
 
     model_guesses = []
     for category_label, object_label in CategoryVerificationItemData().category_object_pairs():
@@ -281,6 +373,53 @@ def make_all_model_decisions_two_thresholds(all_model_data, decision_threshold_y
         DecisionColNames.ModelOutcome, DecisionColNames.ModelIsCorrect,
     ])
     return model_guesses_df
+
+
+# TODO: a lot of repeated code here
+def performance_for_one_threshold(all_model_data: Dict[CategoryObjectPair, DataFrame],
+                                  restrict_to_answerable_items: bool,
+                                  decision_threshold: ActivationValue,
+                                  spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float]:
+    """
+    Returns hit_rate and false-alarm rate.
+    """
+
+    ground_truth_dataframe = CategoryVerificationItemData().dataframe
+
+    model_guesses_df = make_all_model_decisions_one_threshold(all_model_data, decision_threshold, spec)
+
+    # Format columns
+    model_guesses_df[DecisionColNames.DecisionTime] = model_guesses_df[DecisionColNames.DecisionTime].astype('Int64')
+
+    results_dataframe = ground_truth_dataframe.merge(model_guesses_df[[
+        ColNames.CategoryLabel, ColNames.ImageObject,
+        # Exclude ColNames.ShouldBeVerified so we don't get duplicated columns on the merge
+        DecisionColNames.ModelDecision, DecisionColNames.DecisionTime,
+        DecisionColNames.ModelOutcome, DecisionColNames.ModelIsCorrect,
+    ]], how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
+
+    # Save individual threshold data for verification
+    save_dir.mkdir(parents=False, exist_ok=True)
+    with Path(save_dir, f"threshold_{decision_threshold}.csv").open("w") as f:
+        results_dataframe.to_csv(f, header=True, index=False)
+
+    model_hit_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelOutcome] == Outcome.Hit.name])
+    model_fa_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelOutcome] == Outcome.FalseAlarm.name])
+    model_correct_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelIsCorrect] == True])
+
+    if restrict_to_answerable_items:
+        # Rates computed as a proportion of trials on which the model can decide
+        n_trials_signal = len(model_guesses_df[model_guesses_df[ColNames.ShouldBeVerified] == True])
+        n_trials_noise = len(model_guesses_df[model_guesses_df[ColNames.ShouldBeVerified] == False])
+    else:
+        # Rates computed as proportion of ALL trials, not all trials on which the model can decide
+        n_trials_signal = len(results_dataframe[results_dataframe[ColNames.ShouldBeVerified] == True])
+        n_trials_noise = len(results_dataframe[results_dataframe[ColNames.ShouldBeVerified] == False])
+
+    model_hit_rate = model_hit_count / n_trials_signal
+    model_false_alarm_rate = model_fa_count / n_trials_noise
+
+    return model_hit_rate, model_false_alarm_rate
 
 
 def performance_for_two_thresholds(all_model_data: Dict[CategoryObjectPair, DataFrame],
