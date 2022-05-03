@@ -23,13 +23,13 @@ from typing import List, Tuple, Dict, Optional
 
 from numpy import nan
 from pandas import DataFrame
-from scipy.stats import norm
 
+from framework.maths import z_score
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue, Component
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
-from framework.data.category_verification_data import ColNames, CategoryVerificationItemData
+from framework.data.category_verification_data import ColNames, CategoryVerificationItemData, CategoryObjectPair
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 
@@ -176,7 +176,16 @@ class _Decider:
         return decisions
 
 
+class DecisionColNames:
+    """Additional ColNames for model decision data"""
+    ModelDecision: str  = "Model decision"
+    DecisionTime: str   = "Decision made at time"
+    ModelOutcome: str   = "Model outcome"
+    ModelIsCorrect: str = "Model is correct",
+
+
 def make_model_decision(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int, Optional[Component]]:
+    """Make a decision for this object label."""
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
     object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
@@ -206,28 +215,15 @@ def make_model_decision(object_label, decision_threshold_no, decision_threshold_
     return Decision.Undecided, spec.run_for_ticks, None
 
 
-def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
-                               restrict_to_answerable_items: bool,
-                               decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
-                               loglinear: bool,
-                               spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
-    """
-    Returns correct_rate and dprime and criterion.
-
-    :param loglinear: use the loglinear transform for computing d' and criterion (but not for hitrate).
-    """
-
-    zed = norm.ppf
-
-    ground_truth_dataframe = CategoryVerificationItemData().dataframe
+def make_all_model_decisions(all_model_data, decision_threshold_yes, decision_threshold_no, spec) -> DataFrame:
+    """Make decisions for all stimuli."""
 
     model_guesses = []
-    category_item_pairs: List[Tuple[str, str]] = CategoryVerificationItemData().category_object_pairs()
-    for category_label, object_label in category_item_pairs:
+    for category_label, object_label in CategoryVerificationItemData().category_object_pairs():
         item_is_of_category: bool = CategoryVerificationItemData().is_correct(category_label, object_label)
 
         try:
-            model_data = all_model_data[(category_label, object_label)]
+            model_data = all_model_data[CategoryObjectPair(category_label, object_label)]
         # No model output was saved
         except KeyError:
             continue
@@ -251,18 +247,35 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
     model_guesses_df: DataFrame = DataFrame.from_records(model_guesses, columns=[
         ColNames.CategoryLabel, ColNames.ImageObject,
         ColNames.ShouldBeVerified,
-        "Model decision", "Decision made at time",
-        "Model outcome", "Model is correct",
+        DecisionColNames.ModelDecision, DecisionColNames.DecisionTime,
+        DecisionColNames.ModelOutcome, DecisionColNames.ModelIsCorrect,
     ])
+    return model_guesses_df
+
+
+def performance_for_thresholds(all_model_data: Dict[CategoryObjectPair, DataFrame],
+                               restrict_to_answerable_items: bool,
+                               decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
+                               loglinear: bool,
+                               spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
+    """
+    Returns correct_rate and dprime and criterion.
+
+    :param loglinear: use the loglinear transform for computing d' and criterion (but not for hitrate).
+    """
+
+    ground_truth_dataframe = CategoryVerificationItemData().dataframe
+
+    model_guesses_df = make_all_model_decisions(all_model_data, decision_threshold_yes, decision_threshold_no, spec)
 
     # Format columns
-    model_guesses_df["Decision made at time"] = model_guesses_df["Decision made at time"].astype('Int64')
+    model_guesses_df[DecisionColNames.DecisionTime] = model_guesses_df[DecisionColNames.DecisionTime].astype('Int64')
 
     results_dataframe = ground_truth_dataframe.merge(model_guesses_df[[
         ColNames.CategoryLabel, ColNames.ImageObject,
         # Exclude ColNames.ShouldBeVerified so we don't get duplicated columns on the merge
-        "Model decision", "Decision made at time",
-        "Model outcome", "Model is correct",
+        DecisionColNames.ModelDecision, DecisionColNames.DecisionTime,
+        DecisionColNames.ModelOutcome, DecisionColNames.ModelIsCorrect,
     ]], how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
 
     # Save individual threshold data for verification
@@ -270,9 +283,9 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
     with Path(save_dir, f"no{decision_threshold_no}_yes{decision_threshold_yes}.csv").open("w") as f:
         results_dataframe.to_csv(f, header=True, index=False)
 
-    model_hit_count = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.Hit.name])
-    model_fa_count = len(model_guesses_df[model_guesses_df["Model outcome"] == Outcome.FalseAlarm.name])
-    model_correct_count = len(model_guesses_df[model_guesses_df["Model is correct"] == True])
+    model_hit_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelOutcome] == Outcome.Hit.name])
+    model_fa_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelOutcome] == Outcome.FalseAlarm.name])
+    model_correct_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelIsCorrect] == True])
 
     if restrict_to_answerable_items:
         # Rates computed as a proportion of trials on which the model can decide
@@ -301,21 +314,7 @@ def performance_for_thresholds(all_model_data: Dict[Tuple[str, str], DataFrame],
         model_dprime = nan
         model_criterion = nan
     else:
-        model_dprime = zed(model_hit_rate) - zed(model_false_alarm_rate)
-        model_criterion = - (zed(model_hit_rate) + zed(model_false_alarm_rate)) / 2
+        model_dprime = z_score(model_hit_rate) - z_score(model_false_alarm_rate)
+        model_criterion = - (z_score(model_hit_rate) + z_score(model_false_alarm_rate)) / 2
 
     return model_correct_rate, model_dprime, model_criterion
-
-
-def is_repeated_item(category_label: str, object_label: str) -> bool:
-
-    object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
-    category_label_linguistic, category_label_sensorimotor = substitutions_for(category_label)
-    category_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(category_label_linguistic)
-    object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
-
-    all_category_words = set(category_label_linguistic_multiword_parts) | {category_label_sensorimotor}
-    all_object_words = set(object_label_linguistic_multiword_parts) | {object_label_sensorimotor}
-
-    # Repeated item if there's any word in common between category and object in either component
-    return len(all_category_words.intersection(all_object_words)) > 0
