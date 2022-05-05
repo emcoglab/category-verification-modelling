@@ -46,7 +46,7 @@ logger_dateformat = "1%Y-%m-%d %H:%M:%S"
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
 
 # Shared
-_n_thresholds = 100
+_n_thresholds = 10
 THRESHOLDS = [i / _n_thresholds for i in range(_n_thresholds + 1)]  # linspace was causing weird float rounding errors
 
 
@@ -85,12 +85,12 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     for decision_threshold in THRESHOLDS:
         threshold_i += 1
 
-
         hit_rate, fa_rate = performance_for_one_threshold(
             all_model_data=all_model_data,
             restrict_to_answerable_items=restrict_to_answerable_items,
             decision_threshold=decision_threshold,
-            spec=spec, save_dir=Path(save_dir, "hitrates by threshold"))
+            spec=spec, save_dir=Path(save_dir, "hitrates by threshold"),
+            strict_inequality=True)
         hit_rates.append(hit_rate)
         false_alarm_rates.append(fa_rate)
 
@@ -100,22 +100,25 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     items_subset: List[CategoryObjectPair] = list(all_model_data.keys()) if restrict_to_answerable_items else None
 
-    participant_hits  = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.Hits]
-    participant_fas   = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.FalseAlarms]
-    participant_positives = participant_hits + CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.Misses]
-    participant_negatives = participant_fas + CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.CorrectRejections]
-    participant_hit_rates = participant_hits / participant_positives
-    participant_fa_rates = participant_fas / participant_negatives
+    participant_hit_rates = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.HitRate]
+    participant_fa_rates = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.FalseAlarmRate]
 
-    # Plot model ROC
+    plot_roc(hit_rates, false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, save_dir)
+
+
+def plot_roc(hit_rates, false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, save_dir):
+    fig = pyplot.figure()
     pyplot.plot(false_alarm_rates, hit_rates)
-
+    # Identity line
+    pyplot.plot([0, 1], [0, 1], linestyle="--")
     # Add participants
     pyplot.scatter(participant_fa_rates, participant_hit_rates)
-
     pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC"))
+    # Add spline
+    pyplot.close(fig)
 
 
+# noinspection DuplicatedCode
 if __name__ == '__main__':
     basicConfig(format=logger_format, datefmt=logger_dateformat, level=INFO)
     _logger.info("Running %s" % " ".join(sys.argv))

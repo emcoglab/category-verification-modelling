@@ -110,33 +110,36 @@ class _ThresholdDecider(ABC):
     Test a level of activation against threshold(s).
     Remembers the most recent test to inform the first time a decision is reached.
     """
-    def __init__(self):
+    def __init__(self, strict_inequality: bool):
         self.last_decision: Decision = Decision.Waiting
+        self.strict_inequality: bool = strict_inequality
 
     @abstractmethod
     def _make_decision(self, activation):
         """The current decision, based on the current level of activation."""
         pass
 
-    @staticmethod
-    def _above_threshold(activation: ActivationValue, threshold: ActivationValue) -> bool:
+    def _above_threshold(self, activation: ActivationValue, threshold: ActivationValue) -> bool:
         """True when activation is above the yes threshold."""
-        # In case the threshold is equal to the activation cap (i.e. FULL_ACTIVATION), floating-point arithmetic means
-        # we may never reach it. Therefore in this instance alone we reduce the threshold minutely when testing for
-        # aboveness.
-        if threshold == FULL_ACTIVATION:
-            return activation >= threshold - 1e-10
+        if self.strict_inequality:
+            return activation > threshold
         else:
+            # In case the threshold is equal to the activation cap (i.e. FULL_ACTIVATION), floating-point arithmetic
+            # means we may never reach it. Therefore in this instance alone we reduce the threshold minutely when
+            # testing for aboveness.
+            if threshold == FULL_ACTIVATION:
+                threshold -= 1e-10
             return activation >= threshold
 
-    @staticmethod
-    def _below_threshold(activation: ActivationValue, threshold: ActivationValue) -> bool:
+    def _below_threshold(self, activation: ActivationValue, threshold: ActivationValue) -> bool:
         """True when activation is below the no threshold."""
-        # In case the threshold is equal to zero (i.e. minimum activation), floating-point arithmetic means we may never
-        # reach it. So we raise the threshold minutely in this case only when testing for belowness.
-        if threshold == 0:
-            return activation <= threshold + 1e-10
+        if self.strict_inequality:
+            return activation < threshold
         else:
+            # In case the threshold is equal to zero (i.e. minimum activation), floating-point arithmetic means we may
+            # never reach it. So we raise the threshold minutely in this case only when testing for belowness.
+            if threshold == 0:
+                threshold += 1e-10
             return activation <= threshold
 
     def test_activation_level(self, activation: ActivationValue) -> Decision:
@@ -164,8 +167,8 @@ class _OneThresholdDecider(_ThresholdDecider):
     """
     Test a level of activation against a threshold.
     """
-    def __init__(self, threshold: ActivationValue):
-        super().__init__()
+    def __init__(self, threshold: ActivationValue, strict_inequality: bool):
+        super().__init__(strict_inequality=strict_inequality)
 
         self.threshold: ActivationValue = threshold
 
@@ -180,8 +183,8 @@ class _TwoThresholdDecider(_ThresholdDecider):
     """
     Test a level of activation against an upper and lower threshold.
     """
-    def __init__(self, threshold_yes: ActivationValue, threshold_no: ActivationValue):
-        super().__init__()
+    def __init__(self, threshold_yes: ActivationValue, threshold_no: ActivationValue, strict_inequality: bool):
+        super().__init__(strict_inequality=strict_inequality)
 
         assert threshold_no < threshold_yes
 
@@ -231,15 +234,15 @@ class DecisionColNames:
 
 
 # TODO: a lot of repeated code here
-def make_model_decision_one_threshold(object_label, decision_threshold, model_data, spec) -> Tuple[Decision, int, Optional[Component]]:
+def make_model_decision_one_threshold(object_label, decision_threshold, model_data, spec, strict_inequality: bool) -> Tuple[Decision, int, Optional[Component]]:
     """Make a one-threshold decision for this object label."""
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
     object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
 
-    sensorimotor_decider = _OneThresholdDecider(threshold=decision_threshold)
+    sensorimotor_decider = _OneThresholdDecider(threshold=decision_threshold, strict_inequality=strict_inequality)
     linguistic_deciders = [
-        _OneThresholdDecider(threshold=decision_threshold)
+        _OneThresholdDecider(threshold=decision_threshold, strict_inequality=strict_inequality)
         for _part in object_label_linguistic_multiword_parts
     ]
     for tick in range(spec.soa_ticks + 1, spec.run_for_ticks):
@@ -263,15 +266,15 @@ def make_model_decision_one_threshold(object_label, decision_threshold, model_da
     return Decision.No, spec.run_for_ticks, None
 
 
-def make_model_decision_two_threshold(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec) -> Tuple[Decision, int, Optional[Component]]:
+def make_model_decision_two_threshold(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec, strict_inequality: bool) -> Tuple[Decision, int, Optional[Component]]:
     """Make a two-threshold decision for this object label."""
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
     object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
 
-    sensorimotor_decider = _TwoThresholdDecider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
+    sensorimotor_decider = _TwoThresholdDecider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no, strict_inequality=strict_inequality)
     linguistic_deciders = [
-        _TwoThresholdDecider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no)
+        _TwoThresholdDecider(threshold_yes=decision_threshold_yes, threshold_no=decision_threshold_no, strict_inequality=strict_inequality)
         for _part in object_label_linguistic_multiword_parts
     ]
     for tick in range(spec.soa_ticks + 1, spec.run_for_ticks):
@@ -297,7 +300,7 @@ def make_model_decision_two_threshold(object_label, decision_threshold_no, decis
 # TODO: a lot of repeated code here
 def make_all_model_decisions_one_threshold(all_model_data,
                                            decision_threshold,
-                                           spec) -> DataFrame:
+                                           spec, strict_inequality: bool) -> DataFrame:
     """Make one-threshold decisions for all stimuli."""
 
     model_guesses = []
@@ -316,7 +319,8 @@ def make_all_model_decisions_one_threshold(all_model_data,
             object_label,
             decision_threshold,
             model_data,
-            spec)
+            spec,
+            strict_inequality=strict_inequality)
 
         model_outcome: Outcome = Outcome.from_decision(decision=model_decision, should_be_yes=item_is_of_category)
 
@@ -337,7 +341,7 @@ def make_all_model_decisions_one_threshold(all_model_data,
 
 def make_all_model_decisions_two_thresholds(all_model_data,
                                             decision_threshold_yes, decision_threshold_no,
-                                            spec) -> DataFrame:
+                                            spec, strict_inequality: bool) -> DataFrame:
     """Make two-threshold decisions for all stimuli."""
 
     model_guesses = []
@@ -356,7 +360,7 @@ def make_all_model_decisions_two_thresholds(all_model_data,
             object_label,
             decision_threshold_no, decision_threshold_yes,
             model_data,
-            spec)
+            spec, strict_inequality=strict_inequality)
 
         model_outcome: Outcome = Outcome.from_decision(decision=model_decision, should_be_yes=item_is_of_category)
 
@@ -379,14 +383,15 @@ def make_all_model_decisions_two_thresholds(all_model_data,
 def performance_for_one_threshold(all_model_data: Dict[CategoryObjectPair, DataFrame],
                                   restrict_to_answerable_items: bool,
                                   decision_threshold: ActivationValue,
-                                  spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float]:
+                                  spec: CategoryVerificationJobSpec, save_dir: Path,
+                                  strict_inequality: bool) -> Tuple[float, float]:
     """
     Returns hit_rate and false-alarm rate.
     """
 
     ground_truth_dataframe = CategoryVerificationItemData().dataframe
 
-    model_guesses_df = make_all_model_decisions_one_threshold(all_model_data, decision_threshold, spec)
+    model_guesses_df = make_all_model_decisions_one_threshold(all_model_data, decision_threshold, spec, strict_inequality=strict_inequality)
 
     # Format columns
     model_guesses_df[DecisionColNames.DecisionTime] = model_guesses_df[DecisionColNames.DecisionTime].astype('Int64')
@@ -426,7 +431,8 @@ def performance_for_two_thresholds(all_model_data: Dict[CategoryObjectPair, Data
                                    restrict_to_answerable_items: bool,
                                    decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
                                    loglinear: bool,
-                                   spec: CategoryVerificationJobSpec, save_dir: Path) -> Tuple[float, float, float]:
+                                   spec: CategoryVerificationJobSpec, save_dir: Path,
+                                   strict_inequality: bool) -> Tuple[float, float, float]:
     """
     Returns correct_rate and dprime and criterion.
 
@@ -435,7 +441,7 @@ def performance_for_two_thresholds(all_model_data: Dict[CategoryObjectPair, Data
 
     ground_truth_dataframe = CategoryVerificationItemData().dataframe
 
-    model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data, decision_threshold_yes, decision_threshold_no, spec)
+    model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data, decision_threshold_yes, decision_threshold_no, spec, strict_inequality=strict_inequality)
 
     # Format columns
     model_guesses_df[DecisionColNames.DecisionTime] = model_guesses_df[DecisionColNames.DecisionTime].astype('Int64')
