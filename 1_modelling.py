@@ -73,6 +73,9 @@ def _get_best_sensorimotor_translation(sensorimotor_component: SensorimotorCompo
 
 def _get_activation_data(model, category_multiword_parts, category_label_sensorimotor, object_multiword_parts,
                          object_label_sensorimotor):
+    """
+    Gets the activation data relevant to the current condition from the model.
+    """
     # We already know that linguistic category terms exist, as we've activated them (or failed to) before
     category_activation_linguistic_dict = {
         CATEGORY_ACTIVATION_LINGUISTIC_f.format(part)

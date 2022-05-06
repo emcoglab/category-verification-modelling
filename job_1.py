@@ -50,7 +50,7 @@ if __name__ == '__main__':
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
-                                                            "job_specifications/2022-01-24 More variations on the current favourite.yaml")):
+                                                            "job_specifications/2022-05-06 A slightly better one-threshold model.yaml")):
         jobs.append(Job_1(s))
 
     for job in jobs:
