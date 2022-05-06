@@ -48,8 +48,8 @@ logger_dateformat = "1%Y-%m-%d %H:%M:%S"
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
 
 # Shared
-_n_thresholds = 10
-THRESHOLDS = [i / _n_thresholds for i in range(_n_thresholds + 1)]  # linspace was causing weird float rounding errors
+_n_threshold_steps = 10
+THRESHOLDS = [i / _n_threshold_steps for i in range(_n_threshold_steps + 1)]  # linspace was causing weird float rounding errors
 
 
 def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool, restrict_to_answerable_items: bool, overwrite: bool):
@@ -127,14 +127,30 @@ def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant
     pyplot.plot(model_fa_rates, model_hit_rates, "b-")
     # Participant points
     pyplot.plot(participant_fa_rates, participant_hit_rates, "g+")
-    # Participant interpolation
-    pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
+    # Participant mean spline interpolation
+    # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
+    # Participant linearly interpolated areas
+    participant_aucs = []
+    for participant_fa, participant_hit in zip(participant_fa_rates, participant_hit_rates):
+        px = [0, participant_fa, 1]
+        py = [0, participant_hit, 1]
+        pyplot.fill_between(px, py, color=(0, 0, 0, 0.02), label='_nolegend_')
+        participant_aucs.append(trapz(py, px))
 
     # Style graph
     ax.set_xlabel("False alarm rate")
     ax.set_ylabel("Hit rate")
-    ax.set_title(f"ROC curve (model AUC = {auc:.2})")
-    pyplot.legend(["Random classifier", "Model", "Participants", "Participant interpolation"])
+    ax.set_title(f"ROC curve (AUC model:"
+                 f" {auc:.2}; "
+                 f"ppt range:"
+                 f" [{min(participant_aucs):.2f},"
+                 f" {max(participant_aucs):.2f}])")
+    pyplot.legend([
+        "Random classifier",
+        "Model",
+        "Participants",
+        # "Participant interpolation",
+    ])
 
     pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC"))
     pyplot.close(fig)
