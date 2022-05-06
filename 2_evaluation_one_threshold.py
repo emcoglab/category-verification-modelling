@@ -20,14 +20,16 @@ caiwingfield.net
 from __future__ import annotations
 
 import sys
+from copy import deepcopy
 from logging import getLogger, basicConfig, INFO
 from pathlib import Path
+from typing import Dict, List
 
-from copy import deepcopy
 from matplotlib import pyplot
+from numpy import linspace, mean, trapz
 from numpy.random import seed
 from pandas import DataFrame
-from typing import Dict, List
+from scipy import interpolate
 
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.ldm.utils.logging import print_progress
@@ -106,15 +108,35 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     plot_roc(hit_rates, false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, save_dir)
 
 
-def plot_roc(hit_rates, false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, save_dir):
-    fig = pyplot.figure()
-    pyplot.plot(false_alarm_rates, hit_rates)
+def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant_fa_rates, filename_prefix, save_dir):
+
+    fig, ax = pyplot.subplots()
+
+    # AUC
+    auc = trapz(list(reversed(model_hit_rates)), list(reversed(model_fa_rates)))
+
+    # Interpolate
+    anchor_points_x = [0, mean(participant_fa_rates), 1]
+    anchor_points_y = [0, mean(participant_hit_rates), 1]
+    participant_interpolated_x = linspace(0, 1, len(THRESHOLDS), endpoint=True)
+    participant_interpolated_y = interpolate.pchip_interpolate(anchor_points_x, anchor_points_y, participant_interpolated_x)
+
     # Identity line
-    pyplot.plot([0, 1], [0, 1], linestyle="--")
-    # Add participants
-    pyplot.scatter(participant_fa_rates, participant_hit_rates)
+    pyplot.plot([0, 1], [0, 1], "r--")
+    # Model
+    pyplot.plot(model_fa_rates, model_hit_rates, "b-")
+    # Participant points
+    pyplot.plot(participant_fa_rates, participant_hit_rates, "g+")
+    # Participant interpolation
+    pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
+
+    # Style graph
+    ax.set_xlabel("False alarm rate")
+    ax.set_ylabel("Hit rate")
+    ax.set_title(f"ROC curve (model AUC = {auc:.2})")
+    pyplot.legend(["Random classifier", "Model", "Participants", "Participant interpolation"])
+
     pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC"))
-    # Add spline
     pyplot.close(fig)
 
 
