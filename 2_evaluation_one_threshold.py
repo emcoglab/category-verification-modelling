@@ -32,11 +32,12 @@ from pandas import DataFrame
 from scipy import interpolate
 
 from framework.cli.job import CategoryVerificationJobSpec
+from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, \
     CategoryVerificationParticipantOriginal, \
-    CategoryObjectPair
+    CategoryObjectPair, CategoryVerificationItemData
 from framework.evaluation.decision import performance_for_one_threshold
 from framework.evaluation.load import load_model_output_from_dir
 
@@ -75,12 +76,31 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         return
     save_dir.mkdir(parents=False, exist_ok=True)
 
-    try:
-        all_model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, exclude_repeated_items=exclude_repeated_items)
-    except FileNotFoundError:
-        _logger.warning(f"No model data in {model_output_dir.as_posix()}")
-        return
+    filters: Dict[str, CategoryVerificationItemData.Filter] = {
+        "superordinate": CategoryVerificationItemData.Filter(
+            category_taxonomic_levels=["superordinate"],
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
+        "basic": CategoryVerificationItemData.Filter(
+            category_taxonomic_levels=["basic"],
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
+        "both": CategoryVerificationItemData.Filter(
+            category_taxonomic_levels=["superordinate", "basic"],
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
+    }
 
+    for filtering_name, cv_filter in filters.items():
+        try:
+            filtered_model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, with_filter=cv_filter)
+        except FileNotFoundError:
+            _logger.warning(f"No model data in {model_output_dir.as_posix()}")
+            return
+
+        filtered_performance(filtered_model_data, spec, cv_filter, exclude_repeated_items,
+                             restrict_to_answerable_items, save_dir, filtering_name)
+
+
+def filtered_performance(filtered_model_data, spec, with_filter, exclude_repeated_items,
+                         restrict_to_answerable_items, save_dir, filtering_name: str):
     hit_rates = []
     false_alarm_rates = []
     threshold_i = 0
@@ -88,7 +108,8 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         threshold_i += 1
 
         hit_rate, fa_rate = performance_for_one_threshold(
-            all_model_data=all_model_data,
+            all_model_data=filtered_model_data,
+            with_filter=with_filter,
             restrict_to_answerable_items=restrict_to_answerable_items,
             decision_threshold=decision_threshold,
             spec=spec, save_dir=Path(save_dir, "hitrates by threshold"),
@@ -97,18 +118,15 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         false_alarm_rates.append(fa_rate)
 
         print_progress(threshold_i, len(THRESHOLDS), prefix="Running thresholds: ", bar_length=50)
-
     filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
-
-    items_subset: List[CategoryObjectPair] = list(all_model_data.keys()) if restrict_to_answerable_items else None
-
+    filename_suffix = filtering_name
+    items_subset: List[CategoryObjectPair] = list(filtered_model_data.keys()) if restrict_to_answerable_items else None
     participant_hit_rates = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.HitRate]
     participant_fa_rates = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.FalseAlarmRate]
+    plot_roc(hit_rates, false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir)
 
-    plot_roc(hit_rates, false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, save_dir)
 
-
-def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant_fa_rates, filename_prefix, save_dir):
+def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir):
 
     fig, ax = pyplot.subplots()
 
@@ -152,7 +170,7 @@ def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant
         # "Participant interpolation",
     ])
 
-    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC"))
+    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}"))
     pyplot.close(fig)
 
 
@@ -170,7 +188,7 @@ if __name__ == '__main__':
         # "2021-06-25 search for more sensible parameters.yaml",
         # "2021-09-07 Finer search around a good model.yaml",
         # "2021-09-14 Finer search around another good model.yaml",
-        "2022-01-24 More variations on the current favourite.yaml",
+        # "2022-01-24 More variations on the current favourite.yaml",
         "2022-05-06 A slightly better one-threshold model.yaml"
     ]:
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(

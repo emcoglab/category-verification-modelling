@@ -127,19 +127,23 @@ def plot_object_activation_traces(spec: CategoryVerificationJobSpec,
 
 def categorise_errors(spec: CategoryVerificationJobSpec,
                       all_model_data: Dict[CategoryObjectPair, DataFrame],
+                      with_filter: CategoryVerificationItemData.Filter,
                       decision_threshold_yes: float, decision_threshold_no: float):
     """
     Categories the model's correct and incorrect guesses by the type of the stimulus
     """
 
-    model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data, decision_threshold_yes, decision_threshold_no, spec)
+    model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data=all_model_data,
+                                                               decision_threshold_yes=decision_threshold_yes, decision_threshold_no=decision_threshold_no,
+                                                               spec=spec,
+                                                               with_filter=with_filter)
 
     # Add taxonomic level for all items
     model_guesses_df = model_guesses_df.merge(
-        CategoryVerificationItemData().dataframe[[
+        CategoryVerificationItemData().dataframe_filtered(with_filter)[[
             ColNames.CategoryLabel, ColNames.ImageObject,
             # New columns to include
-            ColNames.TaxonomicLevel, ColNames.EasyHardToReject,
+            ColNames.CategoryTaxonomicLevel, ColNames.EasyHardToReject,
         ]],
         on=[ColNames.CategoryLabel, ColNames.ImageObject],
         how="left")
@@ -147,9 +151,9 @@ def categorise_errors(spec: CategoryVerificationJobSpec,
     easy_guesses = model_guesses_df[model_guesses_df[ColNames.EasyHardToReject] == "easy"]
     hard_guesses = model_guesses_df[model_guesses_df[ColNames.EasyHardToReject] == "hard"]
 
-    superordinate_guesses = model_guesses_df[model_guesses_df[ColNames.TaxonomicLevel] == "superordinate"]
-    basic_guesses         = model_guesses_df[model_guesses_df[ColNames.TaxonomicLevel] == "basic"]
-    subordinate_guesses   = model_guesses_df[model_guesses_df[ColNames.TaxonomicLevel] == "subordinate"]
+    superordinate_guesses = model_guesses_df[model_guesses_df[ColNames.CategoryTaxonomicLevel] == "superordinate"]
+    basic_guesses         = model_guesses_df[model_guesses_df[ColNames.CategoryTaxonomicLevel] == "basic"]
+    subordinate_guesses   = model_guesses_df[model_guesses_df[ColNames.CategoryTaxonomicLevel] == "subordinate"]
 
     probability_error_easy = len(easy_guesses[easy_guesses[DecisionColNames.ModelIsCorrect] == False]) / len(easy_guesses)
     probability_error_hard = len(hard_guesses[hard_guesses[DecisionColNames.ModelIsCorrect] == False]) / len(hard_guesses)
@@ -176,6 +180,10 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
 
     assert decision_threshold_no < decision_threshold_yes
 
+    cv_filter = CategoryVerificationItemData.Filter(
+        repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None
+    )
+
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
     if not model_output_dir.exists():
         _logger.warning(f"Model output not found for v{VERSION} in directory {model_output_dir.as_posix()}")
@@ -193,14 +201,24 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
 
     # Load output data data from this run
     try:
-        all_model_data = load_model_output_from_dir(model_output_dir, exclude_repeated_items=exclude_repeated_items)
+        all_model_data = load_model_output_from_dir(model_output_dir)
     except FileNotFoundError:
         _logger.warning(f"No model data in {model_output_dir.as_posix()}")
         return
 
-    plot_object_activation_traces(spec, all_model_data, decision_threshold_yes, decision_threshold_no, save_dir)
+    plot_object_activation_traces(spec=spec,
+                                  all_model_data=all_model_data,
+                                  decision_threshold_yes=decision_threshold_yes,
+                                  decision_threshold_no=decision_threshold_no,
+                                  save_dir=save_dir)
 
-    categorise_errors(spec, all_model_data, decision_threshold_yes, decision_threshold_no)
+
+    categorise_errors(spec=spec,
+                      all_model_data=all_model_data,
+                      with_filter=cv_filter,
+                      decision_threshold_yes=decision_threshold_yes,
+                      decision_threshold_no=decision_threshold_no)
+
 
 
 if __name__ == '__main__':

@@ -266,7 +266,8 @@ def make_model_decision_one_threshold(object_label, decision_threshold, model_da
     return Decision.No, spec.run_for_ticks, None
 
 
-def make_model_decision_two_threshold(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec, strict_inequality: bool) -> Tuple[Decision, int, Optional[Component]]:
+def make_model_decision_two_threshold(object_label, decision_threshold_no, decision_threshold_yes, model_data, spec,
+                                      strict_inequality: bool) -> Tuple[Decision, int, Optional[Component]]:
     """Make a two-threshold decision for this object label."""
 
     object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
@@ -299,12 +300,13 @@ def make_model_decision_two_threshold(object_label, decision_threshold_no, decis
 
 # TODO: a lot of repeated code here
 def make_all_model_decisions_one_threshold(all_model_data,
+                                           with_filter: CategoryVerificationItemData.Filter,
                                            decision_threshold,
                                            spec, strict_inequality: bool) -> DataFrame:
     """Make one-threshold decisions for all stimuli."""
 
     model_guesses = []
-    for category_label, object_label in CategoryVerificationItemData().category_object_pairs():
+    for category_label, object_label in CategoryVerificationItemData().category_object_pairs(with_filter):
         item_is_of_category: bool = CategoryVerificationItemData().is_correct(category_label, object_label)
 
         try:
@@ -340,12 +342,13 @@ def make_all_model_decisions_one_threshold(all_model_data,
 
 
 def make_all_model_decisions_two_thresholds(all_model_data,
+                                            with_filter: CategoryVerificationItemData.Filter,
                                             decision_threshold_yes, decision_threshold_no,
                                             spec, strict_inequality: bool) -> DataFrame:
     """Make two-threshold decisions for all stimuli."""
 
     model_guesses = []
-    for category_label, object_label in CategoryVerificationItemData().category_object_pairs():
+    for category_label, object_label in CategoryVerificationItemData().category_object_pairs(with_filter):
         item_is_of_category: bool = CategoryVerificationItemData().is_correct(category_label, object_label)
 
         try:
@@ -381,6 +384,7 @@ def make_all_model_decisions_two_thresholds(all_model_data,
 
 # TODO: a lot of repeated code here
 def performance_for_one_threshold(all_model_data: Dict[CategoryObjectPair, DataFrame],
+                                  with_filter: CategoryVerificationItemData.Filter,
                                   restrict_to_answerable_items: bool,
                                   decision_threshold: ActivationValue,
                                   spec: CategoryVerificationJobSpec, save_dir: Path,
@@ -389,9 +393,10 @@ def performance_for_one_threshold(all_model_data: Dict[CategoryObjectPair, DataF
     Returns hit_rate and false-alarm rate.
     """
 
-    ground_truth_dataframe = CategoryVerificationItemData().dataframe
+    ground_truth_dataframe = CategoryVerificationItemData().dataframe_filtered(with_filter)
 
-    model_guesses_df = make_all_model_decisions_one_threshold(all_model_data, decision_threshold, spec, strict_inequality=strict_inequality)
+    model_guesses_df = make_all_model_decisions_one_threshold(all_model_data=all_model_data, decision_threshold=decision_threshold,
+                                                              spec=spec, strict_inequality=strict_inequality, with_filter=with_filter)
 
     # Format columns
     model_guesses_df[DecisionColNames.DecisionTime] = model_guesses_df[DecisionColNames.DecisionTime].astype('Int64')
@@ -428,6 +433,7 @@ def performance_for_one_threshold(all_model_data: Dict[CategoryObjectPair, DataF
 
 
 def performance_for_two_thresholds(all_model_data: Dict[CategoryObjectPair, DataFrame],
+                                   with_filter: CategoryVerificationItemData.Filter,
                                    restrict_to_answerable_items: bool,
                                    decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
                                    loglinear: bool,
@@ -439,9 +445,12 @@ def performance_for_two_thresholds(all_model_data: Dict[CategoryObjectPair, Data
     :param loglinear: use the loglinear transform for computing d' and criterion (but not for hitrate).
     """
 
-    ground_truth_dataframe = CategoryVerificationItemData().dataframe
+    ground_truth_dataframe = CategoryVerificationItemData().dataframe_filtered(with_filter)
 
-    model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data, decision_threshold_yes, decision_threshold_no, spec, strict_inequality=strict_inequality)
+    model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data=all_model_data,
+                                                               decision_threshold_yes=decision_threshold_yes, decision_threshold_no=decision_threshold_no,
+                                                               spec=spec, strict_inequality=strict_inequality,
+                                                               with_filter=with_filter)
 
     # Format columns
     model_guesses_df[DecisionColNames.DecisionTime] = model_guesses_df[DecisionColNames.DecisionTime].astype('Int64')

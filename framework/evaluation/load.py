@@ -1,17 +1,16 @@
 from logging import getLogger
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from pandas import DataFrame, read_csv
 
 from framework.evaluation.column_names import CLOCK
 from framework.data.category_verification_data import CategoryVerificationItemData, CategoryObjectPair
-from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 
 _logger = getLogger(__file__)
 
 
-def load_model_output_from_dir(model_output_dir: Path, exclude_repeated_items: bool) -> Dict[CategoryObjectPair, DataFrame]:
+def load_model_output_from_dir(model_output_dir: Path, with_filter: Optional[CategoryVerificationItemData.Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
     """
     Returns a CategoryObjectPair-keyed dictionary of activation traces.
     """
@@ -19,9 +18,7 @@ def load_model_output_from_dir(model_output_dir: Path, exclude_repeated_items: b
 
     # (object, item) -> model_data
     all_model_data: Dict[CategoryObjectPair, DataFrame] = dict()
-    for category_item_pair in CategoryVerificationItemData().category_object_pairs():
-        if exclude_repeated_items and category_item_pair.is_repeated_item(using_tokenizer=modified_word_tokenize):
-            continue
+    for category_item_pair in CategoryVerificationItemData().category_object_pairs(with_filter):
         category_label, object_label = category_item_pair
         model_output_path = Path(model_output_dir, "activation traces",
                                  f"{category_label}-{object_label} activation.csv")

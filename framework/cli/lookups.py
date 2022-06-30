@@ -18,7 +18,7 @@ caiwingfield.net
 
 from ..cognitive_model.ldm.corpus.corpus import CorpusMetadata
 from ..cognitive_model.ldm.corpus.indexing import FreqDist
-from ..cognitive_model.ldm.model.base import DistributionalSemanticModel
+from ..cognitive_model.ldm.model.base import LinguisticDistributionalModel
 from ..cognitive_model.ldm.model.count import LogCoOccurrenceCountModel
 from ..cognitive_model.ldm.model.ngram import LogNgramModel, PPMINgramModel, PMINgramModel
 from ..cognitive_model.ldm.preferences.preferences import Preferences as CorpusPreferences
@@ -35,7 +35,7 @@ def get_corpus_from_name(name: str) -> CorpusMetadata:
         raise NotImplementedError(name)
 
 
-def get_model_from_params(corpus: CorpusMetadata, freq_dist: FreqDist, model_name: str, radius: int) -> DistributionalSemanticModel:
+def get_model_from_params(corpus: CorpusMetadata, freq_dist: FreqDist, model_name: str, radius: int) -> LinguisticDistributionalModel:
     model_name = model_name.lower()
     if model_name == "log_coocc" or model_name == "log_cooccurrence" or model_name == "log_co-occurrence":
         return LogCoOccurrenceCountModel(corpus, radius, freq_dist)
