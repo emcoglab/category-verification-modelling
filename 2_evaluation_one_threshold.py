@@ -76,19 +76,25 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         return
     save_dir.mkdir(parents=False, exist_ok=True)
 
-    filters: Dict[str, CategoryVerificationItemData.Filter] = {
-        "superordinate": CategoryVerificationItemData.Filter(
+    filters: List[CategoryVerificationItemData.Filter] = [
+        CategoryVerificationItemData.Filter(
+            name="superordinate",
             category_taxonomic_levels=["superordinate"],
+            trial_types=[('test', True), ('filler', False)],
             repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
-        "basic": CategoryVerificationItemData.Filter(
+        CategoryVerificationItemData.Filter(
+            name="basic",
             category_taxonomic_levels=["basic"],
+            trial_types=[('test', True), ('filler', False)],
             repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
-        "both": CategoryVerificationItemData.Filter(
+        CategoryVerificationItemData.Filter(
+            name="both",
             category_taxonomic_levels=["superordinate", "basic"],
+            trial_types=[('test', True), ('filler', False)],
             repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
-    }
+    ]
 
-    for filtering_name, cv_filter in filters.items():
+    for cv_filter in filters:
         try:
             filtered_model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, with_filter=cv_filter)
         except FileNotFoundError:
@@ -96,7 +102,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
             return
 
         filtered_performance(filtered_model_data, spec, cv_filter, exclude_repeated_items,
-                             restrict_to_answerable_items, save_dir, filtering_name)
+                             restrict_to_answerable_items, save_dir, cv_filter.name)
 
 
 def filtered_performance(filtered_model_data, spec, with_filter, exclude_repeated_items,
@@ -118,12 +124,22 @@ def filtered_performance(filtered_model_data, spec, with_filter, exclude_repeate
         false_alarm_rates.append(fa_rate)
 
         print_progress(threshold_i, len(THRESHOLDS), prefix="Running thresholds: ", bar_length=50)
+
     filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
     filename_suffix = filtering_name
+
     items_subset: List[CategoryObjectPair] = list(filtered_model_data.keys()) if restrict_to_answerable_items else None
     participant_hit_rates = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.HitRate]
     participant_fa_rates = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.FalseAlarmRate]
+
     plot_roc(hit_rates, false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir)
+
+    save_filtered_item_data(save_dir, with_filter, filename_prefix, filename_suffix)
+
+
+def save_filtered_item_data(save_dir, with_filter, filename_prefix, filename_suffix):
+    with Path(save_dir, f"{filename_prefix} item data {filename_suffix}.csv").open("w") as f:
+        CategoryVerificationItemData().dataframe_filtered(with_filter).to_csv(f, index=False)
 
 
 def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir):
