@@ -172,12 +172,21 @@ def main(job_spec: CategoryVerificationJobSpec):
             else:
                 logger.error(f" No translations available")
 
-    for category_label, object_label in cv_item_data.category_object_pairs():
+    category_object_pairs = cv_item_data.category_object_pairs()
+    # Add items using the assumed object label rather than the always-subordinate object label
+    category_object_pairs += cv_item_data.category_object_pairs(
+        use_assumed_object_label=True,
+        with_filter=CategoryVerificationItemData.Filter("differently assumed", assumed_object_label_differs=True))
+    for category_label, object_label in category_object_pairs:
 
         logger.info(f"Running model on {category_label} -> {object_label}")
 
         activation_tracking_path = Path(activation_tracking_dir, f"{category_label}-{object_label} activation.csv")
         buffer_entries_path = Path(buffer_entries_dir, f"{category_label}-{object_label} buffer.csv")
+
+        if activation_tracking_path.exists():
+            logger.warning(f"{activation_tracking_path.as_posix()} exists, skipping...")
+            continue
 
         object_label_linguistic, object_label_sensorimotor = substitutions_for(object_label)
         category_label_linguistic, category_label_sensorimotor = substitutions_for(category_label)

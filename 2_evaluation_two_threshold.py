@@ -30,10 +30,11 @@ from numpy.random import seed
 from pandas import DataFrame
 
 from framework.cli.job import CategoryVerificationJobSpec
+from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal, \
-    CategoryObjectPair
+    CategoryObjectPair, CategoryVerificationItemData
 from framework.evaluation.decision import performance_for_two_thresholds
 from framework.evaluation.figures import save_heatmap
 from framework.evaluation.load import load_model_output_from_dir
@@ -74,7 +75,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     save_dir.mkdir(parents=False, exist_ok=True)
 
     try:
-        all_model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, exclude_repeated_items=exclude_repeated_items)
+        all_model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir)
     except FileNotFoundError:
         _logger.warning(f"No model data in {model_output_dir.as_posix()}")
         return
@@ -83,6 +84,11 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     dprimes = []
     criteria = []
     threshold_i = 0
+
+    cv_filter = CategoryVerificationItemData.Filter(
+        repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None
+    )
+
     for decision_threshold_no in THRESHOLDS:
         for decision_threshold_yes in THRESHOLDS:
             if decision_threshold_no >= decision_threshold_yes:
@@ -95,7 +101,9 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 decision_threshold_yes=decision_threshold_yes,
                 decision_threshold_no=decision_threshold_no,
                 loglinear=True,
-                spec=spec, save_dir=Path(save_dir, "hitrates by threshold"))
+                spec=spec, save_dir=Path(save_dir, "hitrates by threshold"),
+                with_filter=cv_filter,
+            )
             correct_rates.append((decision_threshold_no, decision_threshold_yes, correct_rate))
             dprimes.append((decision_threshold_no, decision_threshold_yes, dprime))
             criteria.append((decision_threshold_no, decision_threshold_yes, criterion))

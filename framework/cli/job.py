@@ -27,7 +27,7 @@ import yaml
 from framework.cli.lookups import get_model_from_params, get_corpus_from_name
 from framework.cognitive_model.components import ModelComponent, FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.indexing import FreqDist
-from framework.cognitive_model.ldm.model.base import DistributionalSemanticModel
+from framework.cognitive_model.ldm.model.base import LinguisticDistributionalModel
 from framework.cognitive_model.linguistic_components import LinguisticComponent
 from framework.cognitive_model.linguistic_propagator import LinguisticPropagator
 from framework.cognitive_model.sensorimotor_components import SensorimotorComponent, BufferedSensorimotorComponent
@@ -509,7 +509,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
     def to_component(self, component_class) -> LinguisticComponent:
         corpus = get_corpus_from_name(self.corpus_name)
         freq_dist = FreqDist.load(corpus.freq_dist_path)
-        distributional_model: DistributionalSemanticModel = get_model_from_params(
+        distributional_model: LinguisticDistributionalModel = get_model_from_params(
             corpus, freq_dist, self.model_name, self.model_radius)
         return component_class(
             propagator=LinguisticPropagator(
