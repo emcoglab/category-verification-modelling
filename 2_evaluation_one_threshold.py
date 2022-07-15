@@ -205,7 +205,8 @@ if __name__ == '__main__':
         # "2021-09-07 Finer search around a good model.yaml",
         # "2021-09-14 Finer search around another good model.yaml",
         # "2022-01-24 More variations on the current favourite.yaml",
-        "2022-05-06 A slightly better one-threshold model.yaml"
+        # "2022-05-06 A slightly better one-threshold model.yaml",
+        "2022-07-15 good roc-auc candidate.yaml",
     ]:
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
             Path(Path(__file__).parent, "job_specifications", sfn)))])
