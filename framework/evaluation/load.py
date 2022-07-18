@@ -10,7 +10,7 @@ from framework.data.category_verification_data import CategoryVerificationItemDa
 _logger = getLogger(__file__)
 
 
-def load_model_output_from_dir(model_output_dir: Path, with_filter: Optional[CategoryVerificationItemData.Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
+def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, with_filter: Optional[CategoryVerificationItemData.Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
     """
     Returns a CategoryObjectPair-keyed dictionary of activation traces.
     """
@@ -18,7 +18,7 @@ def load_model_output_from_dir(model_output_dir: Path, with_filter: Optional[Cat
 
     # (object, item) -> model_data
     all_model_data: Dict[CategoryObjectPair, DataFrame] = dict()
-    for category_item_pair in CategoryVerificationItemData().category_object_pairs(with_filter):
+    for category_item_pair in CategoryVerificationItemData().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label):
         category_label, object_label = category_item_pair
         model_output_path = Path(model_output_dir, "activation traces",
                                  f"{category_label}-{object_label} activation.csv")

@@ -248,7 +248,7 @@ def make_model_decision_one_threshold(object_label, decision_threshold, model_da
     for tick in range(spec.soa_ticks + 1, spec.run_for_ticks):
         sensorimotor_decision = sensorimotor_decider.test_activation_level(
             activation=model_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].loc[tick])
-        linguistic_decisions = _TwoThresholdDecider.multi_tests(
+        linguistic_decisions = _OneThresholdDecider.multi_tests(
             deciders=linguistic_deciders,
             activations=[
                 model_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].loc[tick]
@@ -258,9 +258,9 @@ def make_model_decision_one_threshold(object_label, decision_threshold, model_da
         # Return decision when made: either component can make either decision
         if sensorimotor_decision.made:
             return sensorimotor_decision, tick, Component.sensorimotor
-        for decision in linguistic_decisions:
-            if decision.made:
-                return decision, tick, Component.linguistic
+        for linguistic_decision in linguistic_decisions:
+            if linguistic_decision.made:
+                return linguistic_decision, tick, Component.linguistic
 
     # If we run out of time, decide no
     return Decision.No, spec.run_for_ticks, None
@@ -306,8 +306,8 @@ def make_all_model_decisions_one_threshold(all_model_data,
     """Make one-threshold decisions for all stimuli."""
 
     model_guesses = []
-    for category_label, object_label in CategoryVerificationItemData().category_object_pairs(with_filter):
-        item_is_of_category: bool = CategoryVerificationItemData().is_correct(category_label, object_label)
+    for category_label, object_label in CategoryVerificationItemData().category_object_pairs(with_filter, use_assumed_object_label=with_filter.use_assumed_object_label):
+        item_is_of_category: bool = CategoryVerificationItemData().is_correct(category_label, object_label, use_assumed_object_label=with_filter.use_assumed_object_label)
 
         try:
             model_data = all_model_data[CategoryObjectPair(category_label, object_label)]
@@ -401,16 +401,19 @@ def performance_for_one_threshold(all_model_data: Dict[CategoryObjectPair, DataF
     # Format columns
     model_guesses_df[DecisionColNames.DecisionTime] = model_guesses_df[DecisionColNames.DecisionTime].astype('Int64')
 
-    results_dataframe = ground_truth_dataframe.merge(model_guesses_df[[
-        ColNames.CategoryLabel, ColNames.ImageObject,
+    image_col = ColNames.ImageLabelAssumed if with_filter.use_assumed_object_label else ColNames.ImageObject
+
+    results_dataframe = ground_truth_dataframe.merge(model_guesses_df.rename(columns={ColNames.ImageObject: image_col})[[
+        ColNames.CategoryLabel, image_col,
         # Exclude ColNames.ShouldBeVerified so we don't get duplicated columns on the merge
         DecisionColNames.ModelDecision, DecisionColNames.DecisionTime,
         DecisionColNames.ModelOutcome, DecisionColNames.ModelIsCorrect,
-    ]], how="left", on=[ColNames.CategoryLabel, ColNames.ImageObject])
+    ]], how="left", on=[ColNames.CategoryLabel, image_col])
 
     # Save individual threshold data for verification
     save_dir.mkdir(parents=False, exist_ok=True)
-    with Path(save_dir, f"threshold_{decision_threshold}.csv").open("w") as f:
+    assumed_flag = f"_assumed" if with_filter.use_assumed_object_label else ""
+    with Path(save_dir, f"threshold_{decision_threshold}{assumed_flag}.csv").open("w") as f:
         results_dataframe.to_csv(f, header=True, index=False)
 
     model_hit_count = len(model_guesses_df[model_guesses_df[DecisionColNames.ModelOutcome] == Outcome.Hit.name])

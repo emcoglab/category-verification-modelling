@@ -53,7 +53,8 @@ _n_threshold_steps = 10
 THRESHOLDS = [i / _n_threshold_steps for i in range(_n_threshold_steps + 1)]  # linspace was causing weird float rounding errors
 
 
-def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool, restrict_to_answerable_items: bool, overwrite: bool):
+def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
+         restrict_to_answerable_items: bool, use_assumed_object_label: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
         If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
@@ -78,25 +79,28 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     filters: List[CategoryVerificationItemData.Filter] = [
         CategoryVerificationItemData.Filter(
-            name="superordinate",
+            name="superordinate" if not use_assumed_object_label else "superordinate (assumed image label)",
             category_taxonomic_levels=["superordinate"],
             trial_types=[('test', True), ('filler', False)],
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
+            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
         CategoryVerificationItemData.Filter(
-            name="basic",
+            name="basic" if not use_assumed_object_label else "basic (assumed image label)",
             category_taxonomic_levels=["basic"],
             trial_types=[('test', True), ('filler', False)],
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
+            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
         CategoryVerificationItemData.Filter(
-            name="both",
+            name="both" if not use_assumed_object_label else "both (assumed image label)",
             category_taxonomic_levels=["superordinate", "basic"],
             trial_types=[('test', True), ('filler', False)],
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
+            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
     ]
 
     for cv_filter in filters:
         try:
-            filtered_model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, with_filter=cv_filter)
+            filtered_model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, with_filter=cv_filter, use_assumed_object_label=use_assumed_object_label)
         except FileNotFoundError:
             _logger.warning(f"No model data in {model_output_dir.as_posix()}")
             return
@@ -174,7 +178,9 @@ def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant
     # Style graph
     ax.set_xlabel("False alarm rate")
     ax.set_ylabel("Hit rate")
-    ax.set_title(f"ROC curve (AUC model:"
+    ax.set_title(f"ROC curve"
+                 f" {filename_suffix}\n"
+                 f"(AUC model:"
                  f" {auc:.2}; "
                  f"ppt range:"
                  f" [{min(participant_aucs):.2f},"
@@ -226,10 +232,12 @@ if __name__ == '__main__':
 
     for j, (spec, sfn, i) in enumerate(specs, start=1):
         _logger.info(f"Evaluating model {j} of {len(specs)}")
-        main(spec=spec,
-             spec_filename=f"{sfn} [{i}]",
-             exclude_repeated_items=True,
-             restrict_to_answerable_items=True,
-             overwrite=True)
+        for use_assumed_object_label in [False, True]:
+            main(spec=spec,
+                 spec_filename=f"{sfn} [{i}]",
+                 exclude_repeated_items=True,
+                 restrict_to_answerable_items=True,
+                 use_assumed_object_label=use_assumed_object_label,
+                 overwrite=True)
 
     _logger.info("Done!")
