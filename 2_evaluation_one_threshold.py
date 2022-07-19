@@ -138,12 +138,37 @@ def filtered_performance(filtered_model_data, spec, with_filter, exclude_repeate
 
     plot_roc(hit_rates, false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir)
 
-    save_filtered_item_data(save_dir, with_filter, filename_prefix, filename_suffix)
+    save_filtered_item_data(filtered_model_data, save_dir, with_filter, filename_prefix, filename_suffix)
 
 
-def save_filtered_item_data(save_dir, with_filter, filename_prefix, filename_suffix):
+def save_filtered_item_data(filtered_model_data: Dict[CategoryObjectPair, DataFrame], save_dir, with_filter, filename_prefix, filename_suffix):
+
+    image_col = ColNames.ImageLabelAssumed if with_filter.use_assumed_object_label else ColNames.ImageObject
+
+    # Start with all data
+    contributing_data: DataFrame = CategoryVerificationItemData().dataframe
+
+    data_included = DataFrame(
+        [
+            {
+                ColNames.CategoryLabel: cop.category_label,
+                image_col: cop.object_label,
+                "Included in analysis": True,  # These passed the filter
+                "Presented to model": cop in filtered_model_data.keys(),  # These passed the filter and made it to the model
+            }
+            for cop in CategoryVerificationItemData().category_object_pairs(
+                with_filter=with_filter,
+                use_assumed_object_label=with_filter.use_assumed_object_label
+            )
+        ]
+    )
+
+    contributing_data = contributing_data.merge(data_included, on=[ColNames.CategoryLabel, image_col], how="left")
+    contributing_data["Included in analysis"].fillna(False, inplace=True)
+    contributing_data["Presented to model"].fillna(False, inplace=True)
+
     with Path(save_dir, f"{filename_prefix} item data {filename_suffix}.csv").open("w") as f:
-        CategoryVerificationItemData().dataframe_filtered(with_filter).to_csv(f, index=False)
+        contributing_data.to_csv(f, index=False)
 
 
 def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir):
