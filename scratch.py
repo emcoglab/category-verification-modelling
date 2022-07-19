@@ -1,10 +1,13 @@
-from framework.data.category_verification_data import CategoryVerificationParticipantOriginal
+from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
+from framework.data.category_verification_data import CategoryVerificationParticipantOriginal, \
+    CategoryVerificationItemData
 
 
 def main():
-    d = CategoryVerificationParticipantOriginal()
+    df = CategoryVerificationItemData().dataframe_filtered(
+        with_filter=CategoryVerificationItemData.Filter("differently assumed", assumed_object_label_differs=True, repeated_items_tokeniser=modified_word_tokenize))
 
-    pass
+    df.to_csv("~/Desktop/test.csv")
 
 
 if __name__ == '__main__':
