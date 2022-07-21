@@ -186,18 +186,19 @@ def main(job_spec: CategoryVerificationJobSpec):
         category_label_linguistic_multiword_parts = modified_word_tokenize(category_label_linguistic)
         object_label_linguistic_multiword_parts = modified_word_tokenize(object_label_linguistic)
 
-        object_prevalence: float
+        object_prevalence_scaled: float
         try:
-            object_prevalence = scale_prevalence_01(
+            object_prevalence_scaled = scale_prevalence_01(
                 prevalence_from_fraction_known(model.sensorimotor_component.sensorimotor_norms
                                                .fraction_known(object_label_sensorimotor)))
         except WordNotInNormsError:
             # In case the word isn't in the norms, make that known, but fall back to full prevalence
-            object_prevalence = 1.0
+            object_prevalence_scaled = 1.0
             logger.warning(f"Could not look up prevalence as {object_label} is not in the sensorimotor norms.")
-            logger.warning(f"\tUsing a default of {object_prevalence} instead.")
+            logger.warning(f"\tUsing a default of {object_prevalence_scaled} (scaled) instead.")
 
         model.reset()
+
         # Remove any guards which may have been added
         if model.linguistic_component.propagator.postsynaptic_guards[0] == just_no_guard:
             model.linguistic_component.propagator.postsynaptic_guards.popleft()
@@ -254,7 +255,7 @@ def main(job_spec: CategoryVerificationJobSpec):
                 model.linguistic_component.propagator.activate_items_with_labels(
                     labels=object_label_linguistic_multiword_parts,
                     # Attenuate linguistic activation by object label prevalence
-                    activation=object_activation_increment * object_prevalence / len(object_label_linguistic_multiword_parts))
+                    activation=object_activation_increment * object_prevalence_scaled / len(object_label_linguistic_multiword_parts))
 
             # Advance the model
             tick_events = model.tick()
