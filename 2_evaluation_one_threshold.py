@@ -171,6 +171,8 @@ def performance_for_one_threshold_simplified(
     Returns hit_rate, false-alarm rate.
     """
 
+    all_data = all_data.copy()  # So we can modify this local copy
+
     # Using strict inequality.
     # If using non-strict inequality, and if threshold == FULL_ACTIVATION, need to reduce it by 1e-10 to account for
     # floating point arithmetic.
