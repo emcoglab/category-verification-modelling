@@ -135,9 +135,6 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         if restrict_to_answerable_items:
             filtered_df.dropna(subset=[MODEL_PEAK_ACTIVATION], inplace=True)
 
-        if use_assumed_object_label:
-            filtered_df = combine_rows_with_same_assumed_image_label(filtered_df)
-
         # Model hitrates
         model_hit_rates = []
         model_false_alarm_rates = []
@@ -164,42 +161,6 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
         with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
             filtered_df.to_csv(f, index=False)
-
-
-def combine_rows_with_same_assumed_image_label(filtered_df):
-    # If using assumed object labels, there may be some repeated rows (i.e. those with the same category and
-    # assumed object labels) in filtered_df.
-    # These will have the same values of MODEL_PEAK_ACTIVATION.
-    # In order that model accuracy/RT values are computed on one-per-category-(assumed-)object-pair basis, we
-    # will remove these duplicate rows.
-    # Because participant accuracy/RT values are computed on the basis of the same items, but different numbers
-    # of participants saw each item, we'll have to combine participant accuracy/RT values using a weighted
-    # average.
-    # For items which can't be combined in this way, we'll drop them.
-    del filtered_df[ColNames.ResponseAccuracySD]
-    del filtered_df[ColNames.ResponseRTSD]
-    del filtered_df[ColNames.ImageObject]  # This would only point to the first of the repeated rows, which is confusing
-    # For the participant columns we'll take the average of, we'll first multiply the mean values by the number
-    # of participants
-    filtered_df[ColNames.ResponseAccuracyMean] = filtered_df[ColNames.ResponseAccuracyMean] * filtered_df[
-        ColNames.ParticipantCount]
-    filtered_df[ColNames.ResponseRTMean] = filtered_df[ColNames.ResponseRTMean] * filtered_df[ColNames.ParticipantCount]
-    # For most columns the values will be duplicated and we can just take the first one
-    aggregation_functions = {
-        col_name: "first" for col_name in filtered_df.columns.values
-    }
-    # For the participant columns, we'll take the sum
-    aggregation_functions[ColNames.ResponseAccuracyMean] = "sum"
-    aggregation_functions[ColNames.ResponseRTMean] = "sum"
-    aggregation_functions[ColNames.ParticipantCount] = "sum"  # Don't forget this one!
-    # Do the aggregation
-    filtered_df = filtered_df.groupby([ColNames.CategoryLabel, ColNames.ImageLabelAssumed], as_index=False).agg(aggregation_functions)
-    # Now divide back by the combined participant count
-    filtered_df[ColNames.ResponseAccuracyMean] = filtered_df[ColNames.ResponseAccuracyMean] / filtered_df[
-        ColNames.ParticipantCount]
-    filtered_df[ColNames.ResponseRTMean] = filtered_df[ColNames.ResponseRTMean] / filtered_df[ColNames.ParticipantCount]
-    # Now there should be one row for each category/object pair, using assumed object labels
-    return filtered_df
 
 
 def performance_for_one_threshold_simplified(
