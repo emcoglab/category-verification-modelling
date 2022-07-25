@@ -23,22 +23,22 @@ import sys
 from copy import deepcopy
 from logging import getLogger, basicConfig, INFO
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 from matplotlib import pyplot
-from numpy import linspace, mean, trapz
+from numpy import trapz
 from numpy.random import seed
 from pandas import DataFrame
-from scipy import interpolate
 
 from framework.cli.job import CategoryVerificationJobSpec
+from framework.cognitive_model.basic_types import ActivationValue
+from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
-from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.version import VERSION
-from framework.data.category_verification_data import ColNames, \
-    CategoryVerificationParticipantOriginal, \
+from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal, \
     CategoryObjectPair, CategoryVerificationItemData
-from framework.evaluation.decision import performance_for_one_threshold
+from framework.data.substitution import substitutions_for
+from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.load import load_model_output_from_dir
 
 _logger = getLogger(__name__)
@@ -52,8 +52,13 @@ ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output
 _n_threshold_steps = 10
 THRESHOLDS = [i / _n_threshold_steps for i in range(_n_threshold_steps + 1)]  # linspace was causing weird float rounding errors
 
+# Additional col names
+MODEL_GUESS = "Model guessd"
+MODEL_PEAK_ACTIVATION = "Model peak post-SOA activation"
 
-def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool, restrict_to_answerable_items: bool, overwrite: bool):
+
+def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
+         restrict_to_answerable_items: bool, use_assumed_object_label: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
         If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
@@ -63,6 +68,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     _logger.info("")
     _logger.info(f"Spec: {spec_filename}")
 
+    # Determine directory paths with optional tests for early exit
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
     if not model_output_dir.exists():
         _logger.warning(f"Model output not found for v{VERSION} in directory {model_output_dir.as_posix()}")
@@ -78,68 +84,114 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     filters: List[CategoryVerificationItemData.Filter] = [
         CategoryVerificationItemData.Filter(
-            name="superordinate",
+            name="superordinate" if not use_assumed_object_label else "superordinate (assumed image label)",
             category_taxonomic_levels=["superordinate"],
             trial_types=[('test', True), ('filler', False)],
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
+            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
         CategoryVerificationItemData.Filter(
-            name="basic",
+            name="basic" if not use_assumed_object_label else "basic (assumed image label)",
             category_taxonomic_levels=["basic"],
             trial_types=[('test', True), ('filler', False)],
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
+            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
         CategoryVerificationItemData.Filter(
-            name="both",
+            name="both" if not use_assumed_object_label else "both (assumed image label)",
             category_taxonomic_levels=["superordinate", "basic"],
             trial_types=[('test', True), ('filler', False)],
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None),
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
+            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
     ]
 
-    for cv_filter in filters:
+    # Add model peak activations
+    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, use_assumed_object_label=use_assumed_object_label)
+
+    def get_peak_activation(row) -> Optional[float]:
+        item_col = ColNames.ImageLabelAssumed if use_assumed_object_label else ColNames.ImageObject
+        cop = CategoryObjectPair(category_label=row[ColNames.CategoryLabel], object_label=row[item_col])
         try:
-            filtered_model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, with_filter=cv_filter)
-        except FileNotFoundError:
-            _logger.warning(f"No model data in {model_output_dir.as_posix()}")
-            return
+            model_activations_df: DataFrame = model_data[cop]
+        except KeyError:
+            return None
+        # The decision rests on the peak activation over object labels over both components, so we can just take the max
+        # of all of them
+        object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
+        object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
+        # We are only interested in the activation after ths SOA
+        post_soa_df = model_activations_df.loc[spec.soa_ticks+1:spec.run_for_ticks]
+        peak_activation_linguistic = post_soa_df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].max()
+        peak_activation_sensorimotor = max(
+            post_soa_df[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].max()
+            for part in object_label_linguistic_multiword_parts
+        )
+        return max(peak_activation_linguistic, peak_activation_sensorimotor)
 
-        filtered_performance(filtered_model_data, spec, cv_filter, exclude_repeated_items,
-                             restrict_to_answerable_items, save_dir, cv_filter.name)
+    for cv_filter in filters:
+
+        # apply filters
+        filtered_df = CategoryVerificationItemData().dataframe_filtered(cv_filter)
+        filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1)
+
+        if restrict_to_answerable_items:
+            filtered_df.dropna(subset=[MODEL_PEAK_ACTIVATION], inplace=True)
+
+        # Model hitrates
+        model_hit_rates = []
+        model_false_alarm_rates = []
+        for decision_threshold in THRESHOLDS:
+
+            hit_rate, fa_rate = performance_for_one_threshold_simplified(
+                all_data=filtered_df,
+                decision_threshold=decision_threshold,
+                strict_inequality=True)
+            model_hit_rates.append(hit_rate)
+            model_false_alarm_rates.append(fa_rate)
+
+        # Participant hitrates
+        participant_summary_df = CategoryVerificationParticipantOriginal().participant_summary_dataframe(
+            use_item_subset=CategoryVerificationItemData.list_category_object_pairs_from_dataframe(
+                filtered_df, use_assumed_object_label=use_assumed_object_label))
+        participant_hit_rates = participant_summary_df[ColNames.HitRate]
+        participant_fa_rates = participant_summary_df[ColNames.FalseAlarmRate]
+
+        filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
+        filename_suffix = cv_filter.name
+
+        plot_roc(model_hit_rates, model_false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir)
+
+        with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
+            filtered_df.to_csv(f, index=False)
 
 
-def filtered_performance(filtered_model_data, spec, with_filter, exclude_repeated_items,
-                         restrict_to_answerable_items, save_dir, filtering_name: str):
-    hit_rates = []
-    false_alarm_rates = []
-    threshold_i = 0
-    for decision_threshold in THRESHOLDS:
-        threshold_i += 1
+def performance_for_one_threshold_simplified(
+        all_data: DataFrame,
+        decision_threshold: ActivationValue,
+        strict_inequality: bool) -> Tuple[float, float]:
+    """
+    Returns hit_rate, false-alarm rate.
+    """
 
-        hit_rate, fa_rate = performance_for_one_threshold(
-            all_model_data=filtered_model_data,
-            with_filter=with_filter,
-            restrict_to_answerable_items=restrict_to_answerable_items,
-            decision_threshold=decision_threshold,
-            spec=spec, save_dir=Path(save_dir, "hitrates by threshold"),
-            strict_inequality=True)
-        hit_rates.append(hit_rate)
-        false_alarm_rates.append(fa_rate)
+    all_data = all_data.copy()  # So we can modify this local copy
 
-        print_progress(threshold_i, len(THRESHOLDS), prefix="Running thresholds: ", bar_length=50)
+    # Using strict inequality.
+    # If using non-strict inequality, and if threshold == FULL_ACTIVATION, need to reduce it by 1e-10 to account for
+    # floating point arithmetic.
+    if strict_inequality:
+        all_data[MODEL_GUESS] = all_data[MODEL_PEAK_ACTIVATION] > decision_threshold
+    else:
+        if decision_threshold == FULL_ACTIVATION:
+            decision_threshold -= 1e-10
+        all_data[MODEL_GUESS] = all_data[MODEL_PEAK_ACTIVATION] >= decision_threshold
 
-    filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
-    filename_suffix = filtering_name
+    n_trials_signal = len(all_data[all_data[ColNames.ShouldBeVerified] == True])
+    n_trials_noise = len(all_data[all_data[ColNames.ShouldBeVerified] == False])
+    model_hit_count = len(all_data[(all_data[ColNames.ShouldBeVerified] == True) & (all_data[MODEL_GUESS] == True)])
+    model_fa_count = len(all_data[(all_data[ColNames.ShouldBeVerified] == False) & (all_data[MODEL_GUESS] == True)])
 
-    items_subset: List[CategoryObjectPair] = list(filtered_model_data.keys()) if restrict_to_answerable_items else None
-    participant_hit_rates = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.HitRate]
-    participant_fa_rates = CategoryVerificationParticipantOriginal().participant_summary_dataframe(use_item_subset=items_subset)[ColNames.FalseAlarmRate]
+    model_hit_rate = model_hit_count / n_trials_signal
+    model_false_alarm_rate = model_fa_count / n_trials_noise
 
-    plot_roc(hit_rates, false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir)
-
-    save_filtered_item_data(save_dir, with_filter, filename_prefix, filename_suffix)
-
-
-def save_filtered_item_data(save_dir, with_filter, filename_prefix, filename_suffix):
-    with Path(save_dir, f"{filename_prefix} item data {filename_suffix}.csv").open("w") as f:
-        CategoryVerificationItemData().dataframe_filtered(with_filter).to_csv(f, index=False)
+    return model_hit_rate, model_false_alarm_rate
 
 
 def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir):
@@ -148,12 +200,6 @@ def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant
 
     # AUC
     auc = trapz(list(reversed(model_hit_rates)), list(reversed(model_fa_rates)))
-
-    # Interpolate
-    anchor_points_x = [0, mean(participant_fa_rates), 1]
-    anchor_points_y = [0, mean(participant_hit_rates), 1]
-    participant_interpolated_x = linspace(0, 1, len(THRESHOLDS), endpoint=True)
-    participant_interpolated_y = interpolate.pchip_interpolate(anchor_points_x, anchor_points_y, participant_interpolated_x)
 
     # Identity line
     pyplot.plot([0, 1], [0, 1], "r--")
@@ -174,7 +220,9 @@ def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant
     # Style graph
     ax.set_xlabel("False alarm rate")
     ax.set_ylabel("Hit rate")
-    ax.set_title(f"ROC curve (AUC model:"
+    ax.set_title(f"ROC curve"
+                 f" {filename_suffix}\n"
+                 f"(AUC model:"
                  f" {auc:.2}; "
                  f"ppt range:"
                  f" [{min(participant_aucs):.2f},"
@@ -206,7 +254,8 @@ if __name__ == '__main__':
         # "2021-09-14 Finer search around another good model.yaml",
         # "2022-01-24 More variations on the current favourite.yaml",
         # "2022-05-06 A slightly better one-threshold model.yaml",
-        "2022-07-15 good roc-auc candidate.yaml",
+        # "2022-07-15 good roc-auc candidate.yaml",
+        "2022-07-25 slower linguistic decay.yaml"
     ]:
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
             Path(Path(__file__).parent, "job_specifications", sfn)))])
@@ -226,10 +275,12 @@ if __name__ == '__main__':
 
     for j, (spec, sfn, i) in enumerate(specs, start=1):
         _logger.info(f"Evaluating model {j} of {len(specs)}")
-        main(spec=spec,
-             spec_filename=f"{sfn} [{i}]",
-             exclude_repeated_items=True,
-             restrict_to_answerable_items=True,
-             overwrite=True)
+        for use_assumed_object_label in [True, False]:
+            main(spec=spec,
+                 spec_filename=f"{sfn} [{i}]",
+                 exclude_repeated_items=True,
+                 restrict_to_answerable_items=True,
+                 use_assumed_object_label=use_assumed_object_label,
+                 overwrite=True)
 
     _logger.info("Done!")
