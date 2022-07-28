@@ -36,7 +36,7 @@ from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal, \
-    CategoryObjectPair, CategoryVerificationItemData, Filter
+    CategoryObjectPair, CategoryVerificationItemData, Filter, CategoryVerificationItemDataBlockedValidation
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.load import load_model_output_from_dir
@@ -58,7 +58,7 @@ MODEL_PEAK_ACTIVATION = "Model peak post-SOA activation"
 
 
 def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
-         restrict_to_answerable_items: bool, use_assumed_object_label: bool, overwrite: bool):
+         restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
         If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
@@ -70,11 +70,13 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     # Determine directory paths with optional tests for early exit
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
+    if validation_run:
+        model_output_dir = Path(model_output_dir, "validation")
     if not model_output_dir.exists():
         _logger.warning(f"Model output not found for v{VERSION} in directory {model_output_dir.as_posix()}")
         return
     if not Path(model_output_dir, " MODEL RUN COMPLETE").exists():
-        _logger.info(f"Incomplete model run found in {model_output_dir.as_posix()}")
+        _logger.warning(f"Incomplete model run found in {model_output_dir.as_posix()}")
         return
     save_dir = Path(model_output_dir, " evaluation")
     if save_dir.exists() and not overwrite:
@@ -129,7 +131,10 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     for cv_filter in filters:
 
         # apply filters
-        filtered_df = CategoryVerificationItemData().dataframe_filtered(cv_filter)
+        if validation_run:
+            filtered_df = CategoryVerificationItemDataBlockedValidation().dataframe_filtered(cv_filter)
+        else:
+            filtered_df = CategoryVerificationItemData().dataframe_filtered(cv_filter)
         filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1)
 
         if restrict_to_answerable_items:
@@ -147,15 +152,22 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
             model_hit_rates.append(hit_rate)
             model_false_alarm_rates.append(fa_rate)
 
-        # Participant hitrates
-        participant_summary_df = CategoryVerificationParticipantOriginal().participant_summary_dataframe(
-            use_item_subset=CategoryVerificationItemData.list_category_object_pairs_from_dataframe(
-                filtered_df, use_assumed_object_label=use_assumed_object_label))
-        participant_hit_rates = participant_summary_df[ColNames.HitRate]
-        participant_fa_rates = participant_summary_df[ColNames.FalseAlarmRate]
-
         filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
         filename_suffix = cv_filter.name
+
+        if validation_run:
+            # Don't have participant data for this
+            participant_hit_rates = None
+            participant_fa_rates = None
+
+        else:
+
+            # Participant hitrates
+            participant_summary_df = CategoryVerificationParticipantOriginal().participant_summary_dataframe(
+                use_item_subset=CategoryVerificationItemData.list_category_object_pairs_from_dataframe(
+                    filtered_df, use_assumed_object_label=use_assumed_object_label))
+            participant_hit_rates = participant_summary_df[ColNames.HitRate]
+            participant_fa_rates = participant_summary_df[ColNames.FalseAlarmRate]
 
         plot_roc(model_hit_rates, model_false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir)
 
@@ -205,17 +217,29 @@ def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant
     pyplot.plot([0, 1], [0, 1], "r--")
     # Model
     pyplot.plot(model_fa_rates, model_hit_rates, "b-")
-    # Participant points
-    pyplot.plot(participant_fa_rates, participant_hit_rates, "g+")
-    # Participant mean spline interpolation
-    # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
-    # Participant linearly interpolated areas
-    participant_aucs = []
-    for participant_fa, participant_hit in zip(participant_fa_rates, participant_hit_rates):
-        px = [0, participant_fa, 1]
-        py = [0, participant_hit, 1]
-        pyplot.fill_between(px, py, color=(0, 0, 0, 0.02), label='_nolegend_')
-        participant_aucs.append(trapz(py, px))
+
+    legend_items = ["Random classifier", "Model"]
+    if participant_hit_rates is not None and participant_fa_rates is not None:
+        # Participant points
+        pyplot.plot(participant_fa_rates, participant_hit_rates, "g+")
+        # Participant mean spline interpolation
+        # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
+        # Participant linearly interpolated areas
+        participant_aucs = []
+        for participant_fa, participant_hit in zip(participant_fa_rates, participant_hit_rates):
+            px = [0, participant_fa, 1]
+            py = [0, participant_hit, 1]
+            pyplot.fill_between(px, py, color=(0, 0, 0, 0.02), label='_nolegend_')
+            participant_aucs.append(trapz(py, px))
+
+        ppt_title_clause = f"; " \
+                         f"ppt range:" \
+                         f" [{min(participant_aucs):.2f}," \
+                         f" {max(participant_aucs):.2f}]"
+
+        legend_items += "Participants"
+    else:
+        ppt_title_clause = ""
 
     # Style graph
     ax.set_xlabel("False alarm rate")
@@ -223,16 +247,10 @@ def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant
     ax.set_title(f"ROC curve"
                  f" {filename_suffix}\n"
                  f"(AUC model:"
-                 f" {auc:.2}; "
-                 f"ppt range:"
-                 f" [{min(participant_aucs):.2f},"
-                 f" {max(participant_aucs):.2f}])")
-    pyplot.legend([
-        "Random classifier",
-        "Model",
-        "Participants",
-        # "Participant interpolation",
-    ])
+                 f" {auc:.2}"
+                 f"{ppt_title_clause})"
+                 )
+    pyplot.legend(legend_items)
 
     pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}"))
     pyplot.close(fig)
@@ -281,6 +299,7 @@ if __name__ == '__main__':
                  exclude_repeated_items=True,
                  restrict_to_answerable_items=True,
                  use_assumed_object_label=use_assumed_object_label,
+                 validation_run=True,
                  overwrite=True)
 
     _logger.info("Done!")

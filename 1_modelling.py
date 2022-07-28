@@ -41,7 +41,8 @@ from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNor
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
-from framework.data.category_verification_data import CategoryVerificationItemData, Filter
+from framework.data.category_verification_data import CategoryVerificationItemData, Filter, \
+    CategoryVerificationItemDataBlockedValidation
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
@@ -115,13 +116,15 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
     }
 
 
-def main(job_spec: CategoryVerificationJobSpec):
+def main(job_spec: CategoryVerificationJobSpec, validation_run: bool):
 
     # Validate spec
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
 
     # Set up output directories
     response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
+    if validation_run:
+        response_dir = Path(response_dir, "validation")
     if not response_dir.is_dir():
         logger.info(f"{response_dir} directory does not exist; making it.")
         response_dir.mkdir(parents=True)
@@ -146,8 +149,17 @@ def main(job_spec: CategoryVerificationJobSpec):
     job_spec.save(in_location=response_dir)
     model.mapping.save_to(directory=response_dir)
 
-    # Stimuli are the same for both datasets so it doesn't matter which we use here
-    cv_item_data = CategoryVerificationItemData()
+    if not validation_run:
+        cv_item_data = CategoryVerificationItemData()
+        category_object_pairs = cv_item_data.category_object_pairs()
+        # Add items using the assumed object label rather than the always-subordinate object label
+        category_object_pairs += cv_item_data.category_object_pairs(
+            use_assumed_object_label=True,
+            with_filter=Filter("differently assumed", assumed_object_label_differs=True))
+    else:
+        cv_item_data = CategoryVerificationItemDataBlockedValidation()
+        category_object_pairs = cv_item_data.category_object_pairs()
+
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
 
@@ -164,11 +176,6 @@ def main(job_spec: CategoryVerificationJobSpec):
             else:
                 logger.error(f" No translations available")
 
-    category_object_pairs = cv_item_data.category_object_pairs()
-    # Add items using the assumed object label rather than the always-subordinate object label
-    category_object_pairs += cv_item_data.category_object_pairs(
-        use_assumed_object_label=True,
-        with_filter=Filter("differently assumed", assumed_object_label_differs=True))
     for category_label, object_label in category_object_pairs:
 
         logger.info(f"Running model on {category_label} -> {object_label}")
@@ -341,6 +348,8 @@ if __name__ == '__main__':
     parser.add_argument("--object_activation", type=ActivationValue, required=True)
     parser.add_argument("--object_activation_duration", type=int, required=True)
 
+    parser.add_argument("--validation_run", action="store_true")
+
     args = parser.parse_args()
 
     if not args.sensorimotor_use_breng_translation:
@@ -393,6 +402,7 @@ if __name__ == '__main__':
             object_activation=args.object_activation,
             incremental_activation_duration=args.object_activation_duration,
         ),
+        validation_run=args.validation_run,
     )
 
     logger.info("Done!")

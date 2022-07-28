@@ -50,10 +50,10 @@ if __name__ == '__main__':
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
-                                                            "job_specifications/2022-07-25 slower linguistic decay experiment.yaml")):
+                                                            "job_specifications/2022-07-15 good roc-auc candidate.yaml")):
         jobs.append(Job_1(s))
 
     for job in jobs:
-        job.run_locally()
+        job.run_locally(extra_arguments=["--validation_run"])
 
     print(f"Submitted {len(jobs)} jobs.")
