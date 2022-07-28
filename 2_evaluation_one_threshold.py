@@ -36,7 +36,7 @@ from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal, \
-    CategoryObjectPair, CategoryVerificationItemData
+    CategoryObjectPair, CategoryVerificationItemData, Filter
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.load import load_model_output_from_dir
@@ -82,20 +82,20 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         return
     save_dir.mkdir(parents=False, exist_ok=True)
 
-    filters: List[CategoryVerificationItemData.Filter] = [
-        CategoryVerificationItemData.Filter(
+    filters: List[Filter] = [
+        Filter(
             name="superordinate" if not use_assumed_object_label else "superordinate (assumed image label)",
             category_taxonomic_levels=["superordinate"],
             trial_types=[('test', True), ('filler', False)],
             repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
             use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
-        CategoryVerificationItemData.Filter(
+        Filter(
             name="basic" if not use_assumed_object_label else "basic (assumed image label)",
             category_taxonomic_levels=["basic"],
             trial_types=[('test', True), ('filler', False)],
             repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
             use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
-        CategoryVerificationItemData.Filter(
+        Filter(
             name="both" if not use_assumed_object_label else "both (assumed image label)",
             category_taxonomic_levels=["superordinate", "basic"],
             trial_types=[('test', True), ('filler', False)],

@@ -31,7 +31,7 @@ from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue, Component
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
-from framework.data.category_verification_data import ColNames, CategoryVerificationItemData, CategoryObjectPair
+from framework.data.category_verification_data import ColNames, CategoryVerificationItemData, CategoryObjectPair, Filter
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 
@@ -250,7 +250,7 @@ def make_model_decision_two_threshold(object_label, decision_threshold_no, decis
 
 
 def make_all_model_decisions_two_thresholds(all_model_data,
-                                            with_filter: CategoryVerificationItemData.Filter,
+                                            with_filter: Filter,
                                             decision_threshold_yes, decision_threshold_no,
                                             spec, strict_inequality: bool) -> DataFrame:
     """Make two-threshold decisions for all stimuli."""
@@ -289,8 +289,9 @@ def make_all_model_decisions_two_thresholds(all_model_data,
     ])
     return model_guesses_df
 
+
 def performance_for_two_thresholds(all_model_data: Dict[CategoryObjectPair, DataFrame],
-                                   with_filter: CategoryVerificationItemData.Filter,
+                                   with_filter: Filter,
                                    restrict_to_answerable_items: bool,
                                    decision_threshold_yes: ActivationValue, decision_threshold_no: ActivationValue,
                                    loglinear: bool,

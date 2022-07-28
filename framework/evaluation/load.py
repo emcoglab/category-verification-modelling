@@ -5,12 +5,12 @@ from typing import Dict, Optional
 from pandas import DataFrame, read_csv
 
 from framework.evaluation.column_names import CLOCK
-from framework.data.category_verification_data import CategoryVerificationItemData, CategoryObjectPair
+from framework.data.category_verification_data import CategoryVerificationItemData, CategoryObjectPair, Filter
 
 _logger = getLogger(__file__)
 
 
-def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, with_filter: Optional[CategoryVerificationItemData.Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
+def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, with_filter: Optional[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
     """
     Returns a CategoryObjectPair-keyed dictionary of activation traces.
     """
