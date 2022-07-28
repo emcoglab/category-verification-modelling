@@ -35,8 +35,9 @@ from framework.cognitive_model.basic_types import ActivationValue
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.version import VERSION
-from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal, \
-    CategoryObjectPair, CategoryVerificationItemData, Filter, CategoryVerificationItemDataBlockedValidation
+from framework.data.category_verification_data import ColNames, CategoryObjectPair, Filter, \
+    CategoryVerificationParticipantOriginal, CategoryVerificationParticipantReplication, \
+    CategoryVerificationItemData, CategoryVerificationItemDataBlockedValidation
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.load import load_model_output_from_dir
@@ -58,7 +59,9 @@ MODEL_PEAK_ACTIVATION = "Model peak post-SOA activation"
 
 
 def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
-         restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool, overwrite: bool):
+         restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool,
+         replication_dataset: bool,
+         overwrite: bool):
     """
     :param: exclude_repeated_items:
         If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
@@ -158,6 +161,8 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
             model_false_alarm_rates.append(fa_rate)
 
         filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
+        if replication_dataset:
+            filename_prefix += " participant replication"
         filename_suffix = cv_filter.name
 
         if validation_run:
@@ -168,7 +173,8 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         else:
 
             # Participant hitrates
-            participant_summary_df = CategoryVerificationParticipantOriginal().participant_summary_dataframe(
+            participant_dataset = CategoryVerificationParticipantReplication() if replication_dataset else CategoryVerificationParticipantOriginal()
+            participant_summary_df = participant_dataset.participant_summary_dataframe(
                 use_item_subset=CategoryVerificationItemData.list_category_object_pairs_from_dataframe(
                     filtered_df, use_assumed_object_label=use_assumed_object_label))
             participant_hit_rates = participant_summary_df[ColNames.HitRate]
@@ -242,7 +248,7 @@ def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant
                          f" [{min(participant_aucs):.2f}," \
                          f" {max(participant_aucs):.2f}]"
 
-        legend_items += "Participants"
+        legend_items.append("Participants")
     else:
         ppt_title_clause = ""
 
@@ -305,6 +311,7 @@ if __name__ == '__main__':
                  restrict_to_answerable_items=True,
                  use_assumed_object_label=use_assumed_object_label,
                  validation_run=True,
+                 replication_dataset=False,
                  overwrite=True)
 
     _logger.info("Done!")
