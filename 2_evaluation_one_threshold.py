@@ -84,23 +84,28 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         return
     save_dir.mkdir(parents=False, exist_ok=True)
 
+    if validation_run:
+        trial_types = None
+    else:
+        trial_types = [('test', True), ('filler', False)]
+
     filters: List[Filter] = [
         Filter(
             name="superordinate" if not use_assumed_object_label else "superordinate (assumed image label)",
             category_taxonomic_levels=["superordinate"],
-            trial_types=[('test', True), ('filler', False)],
+            trial_types=trial_types,
             repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
             use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
         Filter(
             name="basic" if not use_assumed_object_label else "basic (assumed image label)",
             category_taxonomic_levels=["basic"],
-            trial_types=[('test', True), ('filler', False)],
+            trial_types=trial_types,
             repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
             use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
         Filter(
             name="both" if not use_assumed_object_label else "both (assumed image label)",
             category_taxonomic_levels=["superordinate", "basic"],
-            trial_types=[('test', True), ('filler', False)],
+            trial_types=trial_types,
             repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
             use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
     ]

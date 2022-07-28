@@ -149,17 +149,16 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool):
     job_spec.save(in_location=response_dir)
     model.mapping.save_to(directory=response_dir)
 
-    if not validation_run:
+    if validation_run:
+        cv_item_data = CategoryVerificationItemDataBlockedValidation()
+        category_object_pairs = cv_item_data.category_object_pairs()
+    else:
         cv_item_data = CategoryVerificationItemData()
         category_object_pairs = cv_item_data.category_object_pairs()
         # Add items using the assumed object label rather than the always-subordinate object label
         category_object_pairs += cv_item_data.category_object_pairs(
             use_assumed_object_label=True,
             with_filter=Filter("differently assumed", assumed_object_label_differs=True))
-    else:
-        cv_item_data = CategoryVerificationItemDataBlockedValidation()
-        category_object_pairs = cv_item_data.category_object_pairs()
-
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
 
