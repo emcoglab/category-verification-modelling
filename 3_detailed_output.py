@@ -31,7 +31,7 @@ from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import CategoryVerificationParticipantOriginal, \
-    CategoryVerificationItemData, CategoryObjectPair, ColNames
+    CategoryVerificationItemData, CategoryObjectPair, ColNames, Filter
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.decision import make_model_decision_two_threshold, Outcome, make_all_model_decisions_two_thresholds, DecisionColNames
@@ -127,7 +127,7 @@ def plot_object_activation_traces(spec: CategoryVerificationJobSpec,
 
 def categorise_errors(spec: CategoryVerificationJobSpec,
                       all_model_data: Dict[CategoryObjectPair, DataFrame],
-                      with_filter: CategoryVerificationItemData.Filter,
+                      with_filter: Filter,
                       decision_threshold_yes: float, decision_threshold_no: float):
     """
     Categories the model's correct and incorrect guesses by the type of the stimulus
@@ -180,7 +180,7 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
 
     assert decision_threshold_no < decision_threshold_yes
 
-    cv_filter = CategoryVerificationItemData.Filter(
+    cv_filter = Filter(
         repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None
     )
 

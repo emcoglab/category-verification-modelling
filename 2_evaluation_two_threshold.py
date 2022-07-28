@@ -34,7 +34,7 @@ from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokeni
 from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal, \
-    CategoryObjectPair, CategoryVerificationItemData
+    CategoryObjectPair, CategoryVerificationItemData, Filter
 from framework.evaluation.decision import performance_for_two_thresholds
 from framework.evaluation.figures import save_heatmap
 from framework.evaluation.load import load_model_output_from_dir
@@ -85,7 +85,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     criteria = []
     threshold_i = 0
 
-    cv_filter = CategoryVerificationItemData.Filter(
+    cv_filter = Filter(
         repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None
     )
 
