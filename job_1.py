@@ -47,6 +47,8 @@ class Job_1(CategoryVerificationJob):
 
 if __name__ == '__main__':
 
+    ALPHABET = "abcdefghijklmnopqrstuvwxyz"
+
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
@@ -54,6 +56,7 @@ if __name__ == '__main__':
         jobs.append(Job_1(s))
 
     for job in jobs:
-        job.submit(extra_arguments=["--validation_run"])
+        for letter in ALPHABET:
+            job.submit(extra_arguments=["--validation_run", f"--category_starts_with {letter}"])
 
     print(f"Submitted {len(jobs)} jobs.")
