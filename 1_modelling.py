@@ -116,10 +116,13 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
     }
 
 
-def main(job_spec: CategoryVerificationJobSpec, validation_run: bool):
+def main(job_spec: CategoryVerificationJobSpec, validation_run: bool, filter_category_starts_with: Optional[str]):
 
-    # Validate spec
+    # Validate args
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
+    if filter_category_starts_with is not None:
+        assert len(filter_category_starts_with) == 1
+        filter_category_starts_with = filter_category_starts_with.lower()
 
     # Set up output directories
     response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
@@ -175,7 +178,12 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool):
             else:
                 logger.error(f" No translations available")
 
+    if filter_category_starts_with is not None:
+        logger.info(f"Working only on categories starting with {filter_category_starts_with}")
+
     for category_label, object_label in category_object_pairs:
+        if filter_category_starts_with is not None and not category_label.lower().starts_with(filter_category_starts_with):
+            continue
 
         logger.info(f"Running model on {category_label} -> {object_label}")
 
@@ -300,7 +308,10 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool):
         with buffer_entries_path.open("w") as file:
             DataFrame(buffer_entries).to_csv(file, index=False)
 
-    Path(response_dir, " MODEL RUN COMPLETE").touch()
+    if filter_category_starts_with is not None:
+        Path(response_dir, f" MODEL RUN COMPLETE {filter_category_starts_with}").touch()
+    else:
+        Path(response_dir, " MODEL RUN COMPLETE").touch()
 
 
 if __name__ == '__main__':
@@ -348,6 +359,7 @@ if __name__ == '__main__':
     parser.add_argument("--object_activation_duration", type=int, required=True)
 
     parser.add_argument("--validation_run", action="store_true")
+    parser.add_argument("--category_starts_with", type=str)
 
     args = parser.parse_args()
 
@@ -402,6 +414,7 @@ if __name__ == '__main__':
             incremental_activation_duration=args.object_activation_duration,
         ),
         validation_run=args.validation_run,
+        filter_category_starts_with=args.category_starts_with,
     )
 
     logger.info("Done!")
