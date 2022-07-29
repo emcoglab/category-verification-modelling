@@ -181,8 +181,10 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool, filter_cat
     if filter_category_starts_with is not None:
         logger.info(f"Working only on categories starting with {filter_category_starts_with}")
 
+    category_label: str
+    object_label: str
     for category_label, object_label in category_object_pairs:
-        if filter_category_starts_with is not None and not category_label.lower().starts_with(filter_category_starts_with):
+        if filter_category_starts_with is not None and not category_label.lower().startswith(filter_category_starts_with):
             continue
 
         logger.info(f"Running model on {category_label} -> {object_label}")
