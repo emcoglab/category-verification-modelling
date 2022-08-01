@@ -55,8 +55,10 @@ if __name__ == '__main__':
                                                             "job_specifications/2022-08-01 short soa runs.yaml")):
         jobs.append(Job_1(s))
 
+    job_count = 0
     for job in jobs:
         for letter in ALPHABET:
             job.run_locally(extra_arguments=[f"--category_starts_with {letter}"])
+            job_count += 1
 
-    print(f"Submitted {len(jobs)} jobs.")
+    print(f"Submitted {job_count} jobs.")
