@@ -52,11 +52,11 @@ if __name__ == '__main__':
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
-                                                            "job_specifications/2022-07-15 good roc-auc candidate.yaml")):
+                                                            "job_specifications/2022-08-01 short soa runs.yaml")):
         jobs.append(Job_1(s))
 
     for job in jobs:
         for letter in ALPHABET:
-            job.run_locally(extra_arguments=["--validation_run", f"--category_starts_with {letter}"])
+            job.run_locally(extra_arguments=[f"--category_starts_with {letter}"])
 
     print(f"Submitted {len(jobs)} jobs.")
