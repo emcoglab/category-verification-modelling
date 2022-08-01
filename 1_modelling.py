@@ -136,6 +136,14 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool, filter_cat
     activation_tracking_dir.mkdir(exist_ok=True)
     buffer_entries_dir.mkdir(exist_ok=True)
 
+    if filter_category_starts_with is not None:
+        completion_file: Path = Path(response_dir, f" MODEL RUN COMPLETE {filter_category_starts_with}")
+    else:
+        completion_file: Path = Path(response_dir, " MODEL RUN COMPLETE")
+    if completion_file.exists():
+        logger.info(f"Completion file found, aborting: {completion_file.as_posix()}")
+        return
+
     # Set up model
     model = InteractiveCombinedCognitiveModel(
         sensorimotor_component=job_spec.sensorimotor_spec.to_component(SensorimotorComponent),
@@ -310,10 +318,7 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool, filter_cat
         with buffer_entries_path.open("w") as file:
             DataFrame(buffer_entries).to_csv(file, index=False)
 
-    if filter_category_starts_with is not None:
-        Path(response_dir, f" MODEL RUN COMPLETE {filter_category_starts_with}").touch()
-    else:
-        Path(response_dir, " MODEL RUN COMPLETE").touch()
+    completion_file.touch()
 
 
 if __name__ == '__main__':
