@@ -52,7 +52,7 @@ if __name__ == '__main__':
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
-                                                            "job_specifications/2022-08-01 short soa runs.yaml")):
+                                                            "job_specifications/2022-08-01 varying soa.yaml")):
         jobs.append(Job_1(s))
 
     job_count = 0
