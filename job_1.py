@@ -11,15 +11,15 @@ class Job_1(CategoryVerificationJob):
         if distance <= 1:
             return 5
         elif distance <= 1.5:
-            return 30
+            return 20
         # 198 is the largest min edge length, so the threshold below which the graph becomes disconnected
         elif distance <= 1.98:
-            return 55
+            return 45
         elif distance <= 2:
-            return 60
+            return 50
         else:
             # Max
-            return 120
+            return 100
 
     LING_RAM: Dict[str, Dict[int, int]] = {
         "ppmi_ngram": {
@@ -27,8 +27,8 @@ class Job_1(CategoryVerificationJob):
             3_000: 3,
             10_000: 5,
             30_000: 7,
-            40_000: 9,
-            60_000: 11,
+            40_000: 8,
+            60_000: 10,
         }
     }
 
