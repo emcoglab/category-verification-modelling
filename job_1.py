@@ -11,15 +11,15 @@ class Job_1(CategoryVerificationJob):
         if distance <= 1:
             return 5
         elif distance <= 1.5:
-            return 30
+            return 20
         # 198 is the largest min edge length, so the threshold below which the graph becomes disconnected
         elif distance <= 1.98:
-            return 55
+            return 45
         elif distance <= 2:
-            return 60
+            return 50
         else:
             # Max
-            return 120
+            return 100
 
     LING_RAM: Dict[str, Dict[int, int]] = {
         "ppmi_ngram": {
@@ -27,8 +27,8 @@ class Job_1(CategoryVerificationJob):
             3_000: 3,
             10_000: 5,
             30_000: 7,
-            40_000: 9,
-            60_000: 11,
+            40_000: 8,
+            60_000: 10,
         }
     }
 
@@ -52,11 +52,13 @@ if __name__ == '__main__':
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
-                                                            "job_specifications/2022-08-01 short soa runs.yaml")):
+                                                            "job_specifications/2022-08-01 varying soa.yaml")):
         jobs.append(Job_1(s))
 
+    job_count = 0
     for job in jobs:
         for letter in ALPHABET:
             job.submit(extra_arguments=[f"--category_starts_with {letter}"])
+            job_count += 1
 
-    print(f"Submitted {len(jobs)} jobs.")
+    print(f"Submitted {job_count} jobs.")
