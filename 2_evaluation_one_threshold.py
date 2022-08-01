@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import sys
 from copy import deepcopy
+from dataclasses import dataclass
 from logging import getLogger, basicConfig, INFO
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -28,7 +29,7 @@ from typing import Dict, List, Optional, Tuple
 from matplotlib import pyplot
 from numpy import trapz
 from numpy.random import seed
-from pandas import DataFrame
+from pandas import DataFrame, Series
 
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
@@ -60,7 +61,7 @@ MODEL_PEAK_ACTIVATION = "Model peak post-SOA activation"
 
 def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool,
-         replication_dataset: bool,
+         participant_original_dataset: bool, participant_replication_dataset: bool,
          overwrite: bool):
     """
     :param: exclude_repeated_items:
@@ -161,8 +162,12 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
             model_false_alarm_rates.append(fa_rate)
 
         filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
-        if replication_dataset:
-            filename_prefix += " participant replication"
+        if participant_original_dataset and participant_replication_dataset:
+            filename_prefix += " all participants"
+        elif participant_original_dataset:
+            filename_prefix += " original participants"
+        elif participant_replication_dataset:
+            filename_prefix += " replication participants"
         filename_suffix = cv_filter.name
 
         if validation_run:
@@ -173,17 +178,44 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         else:
 
             # Participant hitrates
-            participant_dataset = CategoryVerificationParticipantReplication() if replication_dataset else CategoryVerificationParticipantOriginal()
-            participant_summary_df = participant_dataset.participant_summary_dataframe(
-                use_item_subset=CategoryVerificationItemData.list_category_object_pairs_from_dataframe(
-                    filtered_df, use_assumed_object_label=use_assumed_object_label))
-            participant_hit_rates = participant_summary_df[ColNames.HitRate]
-            participant_fa_rates = participant_summary_df[ColNames.FalseAlarmRate]
+            participant_hit_rates = []
+            participant_fa_rates = []
+            participant_plot_datasets = []
+            if participant_original_dataset:
+                participant_dataset = CategoryVerificationParticipantOriginal()
+                participant_summary_df = participant_dataset.participant_summary_dataframe(
+                    use_item_subset=CategoryVerificationItemData.list_category_object_pairs_from_dataframe(
+                        filtered_df, use_assumed_object_label=use_assumed_object_label))
+                participant_plot_datasets.append(
+                    ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
+                                        fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
+                                        dataset_name="original", colour="g")
+                )
+            if participant_replication_dataset:
+                participant_dataset = CategoryVerificationParticipantReplication()
+                participant_summary_df = participant_dataset.participant_summary_dataframe(
+                    use_item_subset=CategoryVerificationItemData.list_category_object_pairs_from_dataframe(
+                        filtered_df, use_assumed_object_label=use_assumed_object_label))
+                participant_plot_datasets.append(
+                    ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
+                                        fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
+                                        dataset_name="replication", colour="c")
+                )
 
-        plot_roc(model_hit_rates, model_false_alarm_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir)
+        plot_roc(model_hit_rates, model_false_alarm_rates,
+                 participant_plot_datasets,
+                 filename_prefix, filename_suffix, save_dir)
 
         with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
             filtered_df.to_csv(f, index=False)
+
+
+@dataclass
+class ParticipantPlotData:
+    hit_rates: Series
+    fa_rates: Series
+    dataset_name: str
+    colour: str
 
 
 def performance_for_one_threshold_simplified(
@@ -217,7 +249,9 @@ def performance_for_one_threshold_simplified(
     return model_hit_rate, model_false_alarm_rate
 
 
-def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant_fa_rates, filename_prefix, filename_suffix, save_dir):
+def plot_roc(model_hit_rates, model_fa_rates,
+             participant_plot_datasets: List[ParticipantPlotData],
+             filename_prefix, filename_suffix, save_dir):
 
     fig, ax = pyplot.subplots()
 
@@ -230,25 +264,26 @@ def plot_roc(model_hit_rates, model_fa_rates, participant_hit_rates, participant
     pyplot.plot(model_fa_rates, model_hit_rates, "b-")
 
     legend_items = ["Random classifier", "Model"]
-    if participant_hit_rates is not None and participant_fa_rates is not None:
+    participant_aucs = []
+    for participant_plot_data in participant_plot_datasets:
         # Participant points
-        pyplot.plot(participant_fa_rates, participant_hit_rates, "g+")
+        pyplot.plot(participant_plot_data.fa_rates, participant_plot_data.hit_rates, f"{participant_plot_data.colour}+")
         # Participant mean spline interpolation
         # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
         # Participant linearly interpolated areas
-        participant_aucs = []
-        for participant_fa, participant_hit in zip(participant_fa_rates, participant_hit_rates):
+        for participant_fa, participant_hit in zip(participant_plot_data.fa_rates, participant_plot_data.hit_rates):
             px = [0, participant_fa, 1]
             py = [0, participant_hit, 1]
             pyplot.fill_between(px, py, color=(0, 0, 0, 0.02), label='_nolegend_')
             participant_aucs.append(trapz(py, px))
 
+        legend_items.append(f"Participants ({participant_plot_data.dataset_name} dataset)")
+
+    if participant_plot_datasets:
         ppt_title_clause = f"; " \
                          f"ppt range:" \
                          f" [{min(participant_aucs):.2f}," \
                          f" {max(participant_aucs):.2f}]"
-
-        legend_items.append("Participants")
     else:
         ppt_title_clause = ""
 
@@ -310,8 +345,9 @@ if __name__ == '__main__':
                  exclude_repeated_items=True,
                  restrict_to_answerable_items=True,
                  use_assumed_object_label=use_assumed_object_label,
-                 validation_run=True,
-                 replication_dataset=False,
+                 validation_run=False,
+                 participant_original_dataset=True,
+                 participant_replication_dataset=True,
                  overwrite=True)
 
     _logger.info("Done!")
