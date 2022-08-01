@@ -137,8 +137,8 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool, filter_cat
     if validation_run:
         response_dir = Path(response_dir, "validation")
     if not response_dir.is_dir():
-        logger.info(f"{response_dir} directory does not exist; making it.")
-        response_dir.mkdir(parents=True)
+        logger.info(f"{response_dir} directory did not exist; making it.")
+        response_dir.mkdir(parents=True, exist_ok=True)
     activation_tracking_dir = Path(response_dir, "activation traces")
     buffer_entries_dir = Path(response_dir, "buffer entries")
     activation_tracking_dir.mkdir(exist_ok=True)
