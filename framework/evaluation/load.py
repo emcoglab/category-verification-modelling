@@ -5,20 +5,26 @@ from typing import Dict, Optional
 from pandas import DataFrame, read_csv
 
 from framework.evaluation.column_names import CLOCK
-from framework.data.category_verification_data import CategoryVerificationItemData, CategoryObjectPair, Filter
+from framework.data.category_verification_data import CategoryVerificationItemData, CategoryObjectPair, Filter, \
+    CategoryVerificationItemDataBlockedValidation
 
 _logger = getLogger(__file__)
 
 
-def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, with_filter: Optional[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
+def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, validation: bool, with_filter: Optional[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
     """
     Returns a CategoryObjectPair-keyed dictionary of activation traces.
     """
     _logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
 
+    if validation:
+        category_item_pairs = CategoryVerificationItemDataBlockedValidation().category_object_pairs(with_filter)
+    else:
+        category_item_pairs = CategoryVerificationItemData().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label)
+
     # (object, item) -> model_data
     all_model_data: Dict[CategoryObjectPair, DataFrame] = dict()
-    for category_item_pair in CategoryVerificationItemData().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label):
+    for category_item_pair in category_item_pairs:
         category_label, object_label = category_item_pair
         model_output_path = Path(model_output_dir, "activation traces",
                                  f"{category_label}-{object_label} activation.csv")

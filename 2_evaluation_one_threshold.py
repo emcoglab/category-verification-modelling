@@ -114,8 +114,23 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
             use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
     ]
 
+    # When validating, we can break down by category domains
+    if validation_run:
+        category_domains = ["natural", "artefact"]
+        original_filters = list(filters)
+        for f in original_filters:
+            for category_domain in category_domains:
+                new_filter = deepcopy(f)
+                new_filter.category_domain = [category_domain]
+                new_filter.name = f"{category_domain} {f.name}"
+                if new_filter.category_domain == ["natural"] and new_filter.category_taxonomic_levels == ["superordinate"]:
+                    # There are no items here
+                    # TODO: this convolution seems a little silly
+                    continue
+                filters.append(new_filter)
+
     # Add model peak activations
-    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, use_assumed_object_label=use_assumed_object_label)
+    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, use_assumed_object_label=use_assumed_object_label)
 
     def get_peak_activation(row) -> Optional[float]:
         item_col = ColNames.ImageLabelAssumed if use_assumed_object_label else ColNames.ImageObject
@@ -170,17 +185,13 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
             filename_prefix += " replication participants"
         filename_suffix = cv_filter.name
 
+        participant_plot_datasets = []
         if validation_run:
             # Don't have participant data for this
-            participant_hit_rates = None
-            participant_fa_rates = None
+            pass
 
         else:
-
             # Participant hitrates
-            participant_hit_rates = []
-            participant_fa_rates = []
-            participant_plot_datasets = []
             if participant_original_dataset:
                 participant_dataset = CategoryVerificationParticipantOriginal()
                 participant_summary_df = participant_dataset.participant_summary_dataframe(
@@ -318,8 +329,9 @@ if __name__ == '__main__':
         # "2021-09-14 Finer search around another good model.yaml",
         # "2022-01-24 More variations on the current favourite.yaml",
         # "2022-05-06 A slightly better one-threshold model.yaml",
-        # "2022-07-15 good roc-auc candidate.yaml",
-        "2022-07-25 slower linguistic decay experiment.yaml"
+        "2022-07-15 good roc-auc candidate.yaml",
+        # "2022-07-25 slower linguistic decay experiment.yaml",
+        # "2022-08-01 varying soa.yaml",
     ]:
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
             Path(Path(__file__).parent, "job_specifications", sfn)))])
@@ -339,15 +351,14 @@ if __name__ == '__main__':
 
     for j, (spec, sfn, i) in enumerate(specs, start=1):
         _logger.info(f"Evaluating model {j} of {len(specs)}")
-        for use_assumed_object_label in [True, False]:
-            main(spec=spec,
-                 spec_filename=f"{sfn} [{i}]",
-                 exclude_repeated_items=True,
-                 restrict_to_answerable_items=True,
-                 use_assumed_object_label=use_assumed_object_label,
-                 validation_run=False,
-                 participant_original_dataset=True,
-                 participant_replication_dataset=True,
-                 overwrite=True)
+        main(spec=spec,
+             spec_filename=f"{sfn} [{i}]",
+             exclude_repeated_items=True,
+             restrict_to_answerable_items=True,
+             use_assumed_object_label=False,
+             validation_run=True,
+             participant_original_dataset=False,
+             participant_replication_dataset=False,
+             overwrite=True)
 
     _logger.info("Done!")

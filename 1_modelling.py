@@ -124,13 +124,17 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
     }
 
 
-def main(job_spec: CategoryVerificationJobSpec, validation_run: bool, filter_category_starts_with: Optional[str]):
+def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
+         filter_category_starts_with: Optional[str], filter_object_starts_with: Optional[str]):
 
     # Validate args
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
     if filter_category_starts_with is not None:
         assert len(filter_category_starts_with) == 1
         filter_category_starts_with = filter_category_starts_with.lower()
+    if filter_object_starts_with is not None:
+        assert len(filter_object_starts_with) == 1
+        filter_object_starts_with = filter_object_starts_with.lower()
 
     # Set up output directories
     response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
@@ -144,10 +148,11 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool, filter_cat
     activation_tracking_dir.mkdir(exist_ok=True)
     buffer_entries_dir.mkdir(exist_ok=True)
 
+    completion_file: Path = Path(response_dir, " MODEL RUN COMPLETE")
     if filter_category_starts_with is not None:
-        completion_file: Path = Path(response_dir, f" MODEL RUN COMPLETE {filter_category_starts_with}")
-    else:
-        completion_file: Path = Path(response_dir, " MODEL RUN COMPLETE")
+        completion_file = Path(completion_file.parent, completion_file.name + filter_category_starts_with)
+    if filter_object_starts_with is not None:
+        completion_file = Path(completion_file.parent, completion_file.name + "_" + filter_object_starts_with)
     if completion_file.exists():
         logger.info(f"Completion file found, aborting: {completion_file.as_posix()}")
         return
@@ -196,11 +201,16 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool, filter_cat
 
     if filter_category_starts_with is not None:
         logger.info(f"Working only on categories starting with {filter_category_starts_with}")
+    if filter_object_starts_with is not None:
+        logger.info(f"Working on ly on objects starting with {filter_object_starts_with}")
 
     category_label: str
     object_label: str
     for category_label, object_label in category_object_pairs:
+        # Apply category and object initial-letter filtering
         if filter_category_starts_with is not None and not category_label.lower().startswith(filter_category_starts_with):
+            continue
+        if filter_object_starts_with is not None and not object_label.lower().startswith(filter_object_starts_with):
             continue
 
         logger.info(f"Running model on {category_label} -> {object_label}")
@@ -375,6 +385,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--validation_run", action="store_true")
     parser.add_argument("--category_starts_with", type=str)
+    parser.add_argument("--object_starts_with", type=str)
 
     args = parser.parse_args()
 
@@ -430,6 +441,7 @@ if __name__ == '__main__':
         ),
         validation_run=args.validation_run,
         filter_category_starts_with=args.category_starts_with,
+        filter_object_starts_with=args.object_starts_with,
     )
 
     logger.info("Done!")
