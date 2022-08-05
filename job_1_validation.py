@@ -57,8 +57,16 @@ if __name__ == '__main__':
 
     job_count = 0
     for job in jobs:
-        for letter in ALPHABET:
-            job.run_locally(extra_arguments=[f"--category_starts_with {letter}"])
-            job_count += 1
+        for category_letter in ALPHABET:
+            if category_letter == "c":
+                for object_letter in ALPHABET:
+                    job.run_locally(extra_arguments=[f"--validation_run",
+                                                     f"--category_starts_with {category_letter}",
+                                                     f"--object_starts_with {object_letter}"])
+                    job_count += 1
+            else:
+                job.run_locally(extra_arguments=[f"--validation_run",
+                                                 f"--category_starts_with {category_letter}"])
+                job_count += 1
 
     print(f"Submitted {job_count} jobs.")
