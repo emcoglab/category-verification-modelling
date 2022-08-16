@@ -41,6 +41,7 @@ from framework.data.category_verification_data import ColNames, CategoryObjectPa
     CategoryVerificationItemData, CategoryVerificationItemDataBlockedValidation
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
+from framework.evaluation.figures import opacity_for_overlap, named_colour, RGBA
 from framework.evaluation.load import load_model_output_from_dir
 
 _logger = getLogger(__name__)
@@ -200,7 +201,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="original", colour="g")
+                                        dataset_name="original", colour="blueviolet")
                 )
             if participant_replication_dataset:
                 participant_dataset = CategoryVerificationParticipantReplication()
@@ -210,12 +211,15 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="replication", colour="c")
+                                        dataset_name="replication", colour="mediumvioletred")
                 )
 
         plot_roc(model_hit_rates, model_false_alarm_rates,
                  participant_plot_datasets,
-                 filename_prefix, filename_suffix, save_dir)
+                 filename_prefix, filename_suffix, save_dir,
+                 model_colour="mediumblue",
+                 participant_area_colour="indigo",
+                 )
 
         with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
             filtered_df.to_csv(f, index=False)
@@ -262,7 +266,8 @@ def performance_for_one_threshold_simplified(
 
 def plot_roc(model_hit_rates, model_fa_rates,
              participant_plot_datasets: List[ParticipantPlotData],
-             filename_prefix, filename_suffix, save_dir):
+             filename_prefix, filename_suffix, save_dir,
+             model_colour: str, participant_area_colour: str):
 
     fig, ax = pyplot.subplots()
 
@@ -272,20 +277,25 @@ def plot_roc(model_hit_rates, model_fa_rates,
     # Identity line
     pyplot.plot([0, 1], [0, 1], "r--")
     # Model
-    pyplot.plot(model_fa_rates, model_hit_rates, "b-")
+    pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour)
 
     legend_items = ["Random classifier", "Model"]
     participant_aucs = []
+    individual_area_colour: RGBA = named_colour(
+        participant_area_colour,
+        with_alpha=opacity_for_overlap(desired_total_opacity=0.4,
+                                       n_overlaps=sum(len(d.fa_rates) for d in participant_plot_datasets)))
     for participant_plot_data in participant_plot_datasets:
         # Participant points
-        pyplot.plot(participant_plot_data.fa_rates, participant_plot_data.hit_rates, f"{participant_plot_data.colour}+")
+        pyplot.plot(participant_plot_data.fa_rates, participant_plot_data.hit_rates,
+                    "+", color=participant_plot_data.colour)
         # Participant mean spline interpolation
         # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
         # Participant linearly interpolated areas
         for participant_fa, participant_hit in zip(participant_plot_data.fa_rates, participant_plot_data.hit_rates):
             px = [0, participant_fa, 1]
             py = [0, participant_hit, 1]
-            pyplot.fill_between(px, py, color=(0, 0, 0, 0.02), label='_nolegend_')
+            pyplot.fill_between(px, py, color=individual_area_colour, label='_nolegend_')
             participant_aucs.append(trapz(py, px))
 
         legend_items.append(f"Participants ({participant_plot_data.dataset_name} dataset)")
@@ -309,7 +319,8 @@ def plot_roc(model_hit_rates, model_fa_rates,
                  )
     pyplot.legend(legend_items)
 
-    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}"))
+    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.png", dpi=1200))
+    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.svg", dpi=1200))
     pyplot.close(fig)
 
 
@@ -356,9 +367,9 @@ if __name__ == '__main__':
              exclude_repeated_items=True,
              restrict_to_answerable_items=True,
              use_assumed_object_label=False,
-             validation_run=True,
-             participant_original_dataset=False,
-             participant_replication_dataset=False,
+             validation_run=False,
+             participant_original_dataset=True,
+             participant_replication_dataset=True,
              overwrite=True)
 
     _logger.info("Done!")
