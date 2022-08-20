@@ -28,8 +28,8 @@ from framework.cognitive_model.graph import Edge
 from framework.cognitive_model.ldm.corpus.indexing import FreqDist
 from framework.cognitive_model.ldm.model.ngram import PPMINgramModel
 from framework.cognitive_model.ldm.utils.maths import DistanceType
-from framework.cognitive_model.linguistic_propagator import LinguisticPropagator
-from framework.cognitive_model.sensorimotor_propagator import SensorimotorPropagator
+from framework.cognitive_model.propagator_linguistic import LinguisticPropagator
+from framework.cognitive_model.propagator_sensorimotor import SensorimotorPropagator
 from framework.cognitive_model.utils.logging import logger
 from framework.data.category_verification_data import CategoryVerificationItemData
 from framework.data.substitution import substitutions_for

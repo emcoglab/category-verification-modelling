@@ -33,9 +33,9 @@ from framework.cognitive_model.events import ItemEnteredBufferEvent
 from framework.cognitive_model.guards import just_no_guard
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.ldm.utils.maths import DistanceType
-from framework.cognitive_model.linguistic_components import LinguisticComponent
+from framework.cognitive_model.components_linguistic import LinguisticComponent
 from framework.cognitive_model.preferences.preferences import Preferences
-from framework.cognitive_model.sensorimotor_components import SensorimotorComponent
+from framework.cognitive_model.components_sensorimotor import SensorimotorComponent
 from framework.cognitive_model.sensorimotor_norms.breng_translation.dictionary.dialect_dictionary import ameng_to_breng
 from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNormsError
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
