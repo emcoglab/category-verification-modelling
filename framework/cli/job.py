@@ -28,10 +28,10 @@ from framework.cli.lookups import get_model_from_params, get_corpus_from_name
 from framework.cognitive_model.components import ModelComponent, FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.indexing import FreqDist
 from framework.cognitive_model.ldm.model.base import LinguisticDistributionalModel
-from framework.cognitive_model.linguistic_components import LinguisticComponent
-from framework.cognitive_model.linguistic_propagator import LinguisticPropagator
-from framework.cognitive_model.sensorimotor_components import SensorimotorComponent, BufferedSensorimotorComponent
-from framework.cognitive_model.sensorimotor_propagator import SensorimotorPropagator
+from framework.cognitive_model.components_linguistic import LinguisticComponent
+from framework.cognitive_model.propagator_linguistic import LinguisticPropagator
+from framework.cognitive_model.components_sensorimotor import SensorimotorComponent, BufferedSensorimotorComponent
+from framework.cognitive_model.propagator_sensorimotor import SensorimotorPropagator
 from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.basic_types import ActivationValue
 from framework.cognitive_model.graph import EdgePruningType
