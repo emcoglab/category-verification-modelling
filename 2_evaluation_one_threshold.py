@@ -75,6 +75,8 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     # Determine directory paths with optional tests for early exit
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
+    if no_propagation:
+        model_output_dir = Path(model_output_dir.parent, model_output_dir.name + "_no_propagation")
     if validation_run:
         model_output_dir = Path(model_output_dir, "validation")
     if not model_output_dir.exists():
@@ -340,36 +342,28 @@ if __name__ == '__main__':
         # "2021-09-14 Finer search around another good model.yaml",
         # "2022-01-24 More variations on the current favourite.yaml",
         # "2022-05-06 A slightly better one-threshold model.yaml",
-        "2022-07-15 good roc-auc candidate.yaml",
+        # "2022-07-15 good roc-auc candidate.yaml",
         # "2022-07-25 slower linguistic decay experiment.yaml",
         # "2022-08-01 varying soa.yaml",
+        "2022-08-20 good roc model with cut connections.yaml",
     ]:
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
             Path(Path(__file__).parent, "job_specifications", sfn)))])
 
-    systematic_cca_test = False
-    if systematic_cca_test:
-        ccas = [1.0, 0.5, 0.0]
-        specs = []
-        s: CategoryVerificationJobSpec
-        for s, sfn, i in loaded_specs:
-            for cca in ccas:
-                spec = deepcopy(s)
-                spec.cross_component_attenuation = cca
-                specs.append((spec, sfn, i))
-    else:
-        specs = loaded_specs
-
-    for j, (spec, sfn, i) in enumerate(specs, start=1):
-        _logger.info(f"Evaluating model {j} of {len(specs)}")
-        main(spec=spec,
-             spec_filename=f"{sfn} [{i}]",
-             exclude_repeated_items=True,
-             restrict_to_answerable_items=True,
-             use_assumed_object_label=False,
-             validation_run=False,
-             participant_original_dataset=True,
-             participant_replication_dataset=True,
-             overwrite=True)
+    for j, (spec, sfn, i) in enumerate(loaded_specs, start=1):
+        _logger.info(f"Evaluating model {j} of {len(loaded_specs)}")
+        for no_propagation in [True, False]:
+            main(
+                spec=spec,
+                spec_filename=f"{sfn} [{i}]",
+                exclude_repeated_items=True,
+                restrict_to_answerable_items=True,
+                use_assumed_object_label=False,
+                validation_run=False,
+                participant_original_dataset=True,
+                participant_replication_dataset=True,
+                overwrite=True,
+                no_propagation=no_propagation,
+            )
 
     _logger.info("Done!")

@@ -52,13 +52,17 @@ if __name__ == '__main__':
     jobs = []
     s: CategoryVerificationJobSpec
     for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
-                                                            "job_specifications/2022-08-01 varying soa.yaml")):
+                                                            "job_specifications/2022-08-20 good roc model with cut connections.yaml")):
         jobs.append(Job_1(s))
 
     job_count = 0
-    for job in jobs:
-        for letter in ALPHABET:
-            job.run_locally(extra_arguments=[f"--category_starts_with {letter}"])
-            job_count += 1
+    for no_propagation in [True, False]:
+        for job in jobs:
+            for letter in ALPHABET:
+                extra_arguments = [f"--category_starts_with {letter}"]
+                if no_propagation:
+                    extra_arguments.append("--no_propagation")
+                job.run_locally(extra_arguments=extra_arguments)
+                job_count += 1
 
     print(f"Submitted {job_count} jobs.")

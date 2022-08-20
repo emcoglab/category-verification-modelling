@@ -117,7 +117,8 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
 
 
 def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
-         filter_category_starts_with: Optional[str], filter_object_starts_with: Optional[str]):
+         filter_category_starts_with: Optional[str], filter_object_starts_with: Optional[str],
+         no_propagation: bool = False):
 
     # Validate args
     assert job_spec.soa_ticks <= job_spec.run_for_ticks
@@ -130,6 +131,8 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
 
     # Set up output directories
     response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
+    if no_propagation:
+        response_dir = Path(response_dir.parent, response_dir.name + "_no_propagation")
     if validation_run:
         response_dir = Path(response_dir, "validation")
     if not response_dir.is_dir():
@@ -294,6 +297,14 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
             # Advance the model
             tick_events = model.tick()
 
+            # Apply the no-propagation option
+            if no_propagation:
+                logger.info("Further activations will be non-propagating")
+                model.linguistic_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
+                model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
+                # Only do it once
+                no_propagation = False
+
             # Record buffer entries
             buffer_events = [e for e in tick_events if isinstance(e, ItemEnteredBufferEvent)]
             buffer_entries.extend([
@@ -379,6 +390,8 @@ if __name__ == '__main__':
     parser.add_argument("--category_starts_with", type=str)
     parser.add_argument("--object_starts_with", type=str)
 
+    parser.add_argument("--no_propagation", action="store_true")
+
     args = parser.parse_args()
 
     if not args.sensorimotor_use_breng_translation:
@@ -434,6 +447,7 @@ if __name__ == '__main__':
         validation_run=args.validation_run,
         filter_category_starts_with=args.category_starts_with,
         filter_object_starts_with=args.object_starts_with,
+        no_propagation=args.no_propagation,
     )
 
     logger.info("Done!")
