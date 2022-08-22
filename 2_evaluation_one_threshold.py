@@ -63,7 +63,7 @@ MODEL_PEAK_ACTIVATION = "Model peak post-SOA activation"
 def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool,
          participant_original_dataset: bool, participant_replication_dataset: bool,
-         overwrite: bool):
+         no_propagation: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
         If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
