@@ -245,9 +245,9 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
         model.reset()
 
         # Remove any guards which may have been added
-        if model.linguistic_component.propagator.firing_guards[0] == just_no_guard:
+        while model.linguistic_component.propagator.firing_guards[0] == just_no_guard:
             model.linguistic_component.propagator.firing_guards.popleft()
-        if model.sensorimotor_component.propagator.firing_guards[0] == just_no_guard:
+        while model.sensorimotor_component.propagator.firing_guards[0] == just_no_guard:
             model.sensorimotor_component.propagator.firing_guards.popleft()
 
         # Activate the initial category label in the linguistic component only
