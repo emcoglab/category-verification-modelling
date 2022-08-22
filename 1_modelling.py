@@ -245,10 +245,10 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
         model.reset()
 
         # Remove any guards which may have been added
-        if model.linguistic_component.propagator.postsynaptic_guards[0] == just_no_guard:
-            model.linguistic_component.propagator.postsynaptic_guards.popleft()
-        if model.sensorimotor_component.propagator.postsynaptic_guards[0] == just_no_guard:
-            model.sensorimotor_component.propagator.postsynaptic_guards.popleft()
+        if model.linguistic_component.propagator.firing_guards[0] == just_no_guard:
+            model.linguistic_component.propagator.firing_guards.popleft()
+        if model.sensorimotor_component.propagator.firing_guards[0] == just_no_guard:
+            model.sensorimotor_component.propagator.firing_guards.popleft()
 
         # Activate the initial category label in the linguistic component only
         try:
@@ -289,8 +289,8 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
                 # activations become non-propagating
                 if model.clock == job_spec.soa_ticks:
                     logger.info("Further activations will be non-propagating")
-                    model.linguistic_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
-                    model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
+                    model.linguistic_component.propagator.firing_guards.appendleft(just_no_guard)
+                    model.sensorimotor_component.propagator.firing_guards.appendleft(just_no_guard)
 
                 # Activate sensorimotor item directly
                 _activate_sensorimotor_item(
@@ -307,11 +307,16 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
 
             # Apply the no-propagation option
             if no_propagation:
-                logger.info("Further activations will be non-propagating")
-                model.linguistic_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
-                model.sensorimotor_component.propagator.postsynaptic_guards.appendleft(just_no_guard)
-                # Only do it once
-                no_propagation = False
+                # It's the linguistic component which is activated externally, so we stop further propagation there
+                # after the first tick.
+                if model.clock == 1:
+                    logger.info("Further activations will be non-propagating")
+                    model.linguistic_component.propagator.firing_guards.appendleft(just_no_guard)
+                # The sensorimotor component is only reached via indirect activation from the linguistic component, so
+                # we have to wait for the linguistic → sensorimotor inter-component delay to elapse until we stop
+                # further propagations there.
+                if model.clock == 1 + job_spec.lc_to_smc_delay:
+                    model.sensorimotor_component.propagator.firing_guards.appendleft(just_no_guard)
 
             # Record buffer entries
             buffer_events = [e for e in tick_events if isinstance(e, ItemEnteredBufferEvent)]
@@ -329,14 +334,14 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
                 for e in buffer_events
             ])
 
-            logger.info(f"Clock = {model.clock}")
-
             # Record the relevant activations
             # There are a variable number of columns, depending on whether the items contain multiple words or not.
-            # Therefore we record it in a list[dict] and build it into a DataFrame later for saving.
+            # Therefore, we record it in a list[dict] and build it into a DataFrame later for saving.
             activation_tracking_data.append(_get_activation_data(model,
                                             category_label_linguistic_multiword_parts, category_label_sensorimotor,
                                             object_label_linguistic_multiword_parts, object_label_sensorimotor))
+
+            logger.info(f"Clock = {model.clock} tick completed")
 
         if abort_item:
             continue
