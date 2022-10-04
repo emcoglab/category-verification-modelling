@@ -164,6 +164,7 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
         buffer_threshold=job_spec.buffer_threshold,
         buffer_capacity_linguistic_items=job_spec.buffer_capacity_linguistic_items,
         buffer_capacity_sensorimotor_items=job_spec.buffer_capacity_sensorimotor_items,
+        use_linguistic_placeholder=False,
     )
     job_spec.save(in_location=response_dir)
     model.mapping.save_to(directory=response_dir)
