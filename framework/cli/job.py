@@ -899,4 +899,8 @@ class CategoryVerificationJob(InteractiveCombinedJob, ABC):
         self.spec: CategoryVerificationJobSpec
         super().__init__(*args, **kwargs)
 
+    @property
+    def name(self) -> str:
+        return "cv" + super().name
+
 # endregion
