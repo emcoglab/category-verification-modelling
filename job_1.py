@@ -56,9 +56,9 @@ if __name__ == '__main__':
         jobs.append(Job_1(s))
 
     job_count = 0
-    for no_propagation in [True, False]:
-        for job in jobs:
-            for letter in ALPHABET:
+    for letter in ALPHABET:
+        for no_propagation in [True, False]:
+            for job in jobs:
                 extra_arguments = [f"--category_starts_with {letter}"]
                 if no_propagation:
                     extra_arguments.append("--no_propagation")
