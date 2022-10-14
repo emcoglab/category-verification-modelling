@@ -22,12 +22,11 @@ from __future__ import annotations
 import sys
 from copy import deepcopy
 from dataclasses import dataclass
-from logging import getLogger, basicConfig, INFO
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from matplotlib import pyplot
-from numpy import trapz
+from numpy import trapz, isnan, nan
 from numpy.random import seed
 from pandas import DataFrame, Series
 
@@ -35,6 +34,7 @@ from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
+from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryObjectPair, Filter, \
     CategoryVerificationParticipantOriginal, CategoryVerificationParticipantReplication, \
@@ -44,9 +44,6 @@ from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, 
 from framework.evaluation.figures import opacity_for_overlap, named_colour, RGBA
 from framework.evaluation.load import load_model_output_from_dir
 
-_logger = getLogger(__name__)
-logger_format = '%(asctime)s | %(levelname)s | %(module)s | %(message)s'
-logger_dateformat = "1%Y-%m-%d %H:%M:%S"
 
 # Paths
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
@@ -59,6 +56,8 @@ THRESHOLDS = [i / _n_threshold_steps for i in range(_n_threshold_steps + 1)]  # 
 MODEL_GUESS = "Model guessd"
 MODEL_PEAK_ACTIVATION = "Model peak post-SOA activation"
 
+ALPHABET = "abcdefghijklmnopqrstuvwxyz"
+
 
 def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool,
@@ -70,8 +69,8 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         (CUP - paper cup), the items are excluded from further analysis.
     """
 
-    _logger.info("")
-    _logger.info(f"Spec: {spec_filename}")
+    logger.info("")
+    logger.info(f"Spec: {spec_filename}")
 
     # Determine directory paths with optional tests for early exit
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
@@ -80,14 +79,23 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     if validation_run:
         model_output_dir = Path(model_output_dir, "validation")
     if not model_output_dir.exists():
-        _logger.warning(f"Model output not found for v{VERSION} in directory {model_output_dir.as_posix()}")
+        logger.warning(f"Model output not found for v{VERSION} in directory {model_output_dir.as_posix()}")
         return
-    if not Path(model_output_dir, " MODEL RUN COMPLETE").exists():
-        _logger.warning(f"Incomplete model run found in {model_output_dir.as_posix()}")
-        return
+    complete_file = Path(model_output_dir, " MODEL RUN COMPLETE")
+    if not complete_file.exists():
+        # Repair parallelised run completion files
+        for letter1 in ALPHABET.lower():
+            if all(Path(complete_file.parent, complete_file.name + letter1 + "_" + letter2).exists() for letter2 in ALPHABET.lower()):
+                Path(complete_file.parent, complete_file.name + letter1).touch()
+        if all(Path(complete_file.parent, complete_file.name + letter).exists() for letter in ALPHABET.lower()):
+            logger.info(f"Parallelised model was complete, creating {complete_file.as_posix()}")
+            complete_file.touch()
+        else:
+            logger.warning(f"Skipping incomplete model run: {complete_file.parent.as_posix()}")
+            return
     save_dir = Path(model_output_dir, " evaluation")
     if save_dir.exists() and not overwrite:
-        _logger.info(f"Evaluation complete for {save_dir.as_posix()}")
+        logger.info(f"Evaluation complete for {save_dir.as_posix()}")
         return
     save_dir.mkdir(parents=False, exist_ok=True)
 
@@ -135,25 +143,42 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     # Add model peak activations
     model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, use_assumed_object_label=use_assumed_object_label)
 
-    def get_peak_activation(row) -> Optional[float]:
+    def get_peak_activation(row, *, allow_missing_objects: bool) -> float:
         item_col = ColNames.ImageLabelAssumed if use_assumed_object_label else ColNames.ImageObject
         cop = CategoryObjectPair(category_label=row[ColNames.CategoryLabel], object_label=row[item_col])
         try:
             model_activations_df: DataFrame = model_data[cop]
         except KeyError:
-            return None
+            return nan
         # The decision rests on the peak activation over object labels over both components, so we can just take the max
         # of all of them
         object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
         object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
         # We are only interested in the activation after ths SOA
         post_soa_df = model_activations_df.loc[spec.soa_ticks+1:spec.run_for_ticks]
-        peak_activation_linguistic = post_soa_df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].max()
-        peak_activation_sensorimotor = max(
+
+        peak_activation_sensorimotor = post_soa_df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].max()
+
+        linguistic_activations = [
             post_soa_df[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].max()
             for part in object_label_linguistic_multiword_parts
-        )
-        return max(peak_activation_linguistic, peak_activation_sensorimotor)
+        ]
+
+        if not allow_missing_objects:
+            if isnan(peak_activation_sensorimotor) or any(isnan(a) for a in linguistic_activations):
+                return nan
+
+        if all(isnan(a) for a in linguistic_activations):
+            # Can't take a max
+            peak_activation_linguistic = nan
+        else:
+            peak_activation_linguistic = max(a for a in linguistic_activations if not isnan(a))
+
+        if isnan(peak_activation_linguistic) and isnan(peak_activation_sensorimotor):
+            # Can't take a max
+            return nan
+        else:
+            return max(ac for ac in [peak_activation_linguistic, peak_activation_sensorimotor] if not isnan(ac))
 
     for cv_filter in filters:
 
@@ -162,10 +187,12 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
             filtered_df = CategoryVerificationItemDataBlockedValidation().dataframe_filtered(cv_filter)
         else:
             filtered_df = CategoryVerificationItemData().dataframe_filtered(cv_filter)
-        filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1)
 
         if restrict_to_answerable_items:
+            filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1, allow_missing_objects=False)
             filtered_df.dropna(subset=[MODEL_PEAK_ACTIVATION], inplace=True)
+        else:
+            filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1, allow_missing_objects=True)
 
         # Model hitrates
         model_hit_rates = []
@@ -282,31 +309,31 @@ def plot_roc(model_hit_rates, model_fa_rates,
     pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour)
 
     legend_items = ["Random classifier", "Model"]
-    participant_aucs = []
-    individual_area_colour: RGBA = named_colour(
-        participant_area_colour,
-        with_alpha=opacity_for_overlap(desired_total_opacity=0.4,
-                                       n_overlaps=sum(len(d.fa_rates) for d in participant_plot_datasets)))
-    for participant_plot_data in participant_plot_datasets:
-        # Participant points
-        pyplot.plot(participant_plot_data.fa_rates, participant_plot_data.hit_rates,
-                    "+", color=participant_plot_data.colour)
-        # Participant mean spline interpolation
-        # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
-        # Participant linearly interpolated areas
-        for participant_fa, participant_hit in zip(participant_plot_data.fa_rates, participant_plot_data.hit_rates):
-            px = [0, participant_fa, 1]
-            py = [0, participant_hit, 1]
-            pyplot.fill_between(px, py, color=individual_area_colour, label='_nolegend_')
-            participant_aucs.append(trapz(py, px))
-
-        legend_items.append(f"Participants ({participant_plot_data.dataset_name} dataset)")
-
     if participant_plot_datasets:
+        participant_aucs = []
+        individual_area_colour: RGBA = named_colour(
+            participant_area_colour,
+            with_alpha=opacity_for_overlap(desired_total_opacity=0.4,
+                                           n_overlaps=sum(len(d.fa_rates) for d in participant_plot_datasets)))
+        for participant_plot_data in participant_plot_datasets:
+            # Participant points
+            pyplot.plot(participant_plot_data.fa_rates, participant_plot_data.hit_rates,
+                        "+", color=participant_plot_data.colour)
+            # Participant mean spline interpolation
+            # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
+            # Participant linearly interpolated areas
+            for participant_fa, participant_hit in zip(participant_plot_data.fa_rates, participant_plot_data.hit_rates):
+                px = [0, participant_fa, 1]
+                py = [0, participant_hit, 1]
+                pyplot.fill_between(px, py, color=individual_area_colour, label='_nolegend_')
+                participant_aucs.append(trapz(py, px))
+
+            legend_items.append(f"Participants ({participant_plot_data.dataset_name} dataset)")
+
         ppt_title_clause = f"; " \
-                         f"ppt range:" \
-                         f" [{min(participant_aucs):.2f}," \
-                         f" {max(participant_aucs):.2f}]"
+                           f"ppt range:" \
+                           f" [{min(participant_aucs):.2f}," \
+                           f" {max(participant_aucs):.2f}]"
     else:
         ppt_title_clause = ""
 
@@ -328,8 +355,7 @@ def plot_roc(model_hit_rates, model_fa_rates,
 
 # noinspection DuplicatedCode
 if __name__ == '__main__':
-    basicConfig(format=logger_format, datefmt=logger_dateformat, level=INFO)
-    _logger.info("Running %s" % " ".join(sys.argv))
+    logger.info("Running %s" % " ".join(sys.argv))
 
     seed(1)  # Reproducible results
 
@@ -351,7 +377,7 @@ if __name__ == '__main__':
             Path(Path(__file__).parent, "job_specifications", sfn)))])
 
     for j, (spec, sfn, i) in enumerate(loaded_specs, start=1):
-        _logger.info(f"Evaluating model {j} of {len(loaded_specs)}")
+        logger.info(f"Evaluating model {j} of {len(loaded_specs)}")
         for no_propagation in [True, False]:
             main(
                 spec=spec,
@@ -359,11 +385,11 @@ if __name__ == '__main__':
                 exclude_repeated_items=True,
                 restrict_to_answerable_items=True,
                 use_assumed_object_label=False,
-                validation_run=False,
-                participant_original_dataset=True,
-                participant_replication_dataset=True,
+                validation_run=True,
+                participant_original_dataset=False,
+                participant_replication_dataset=False,
                 overwrite=True,
                 no_propagation=no_propagation,
             )
 
-    _logger.info("Done!")
+    logger.info("Done!")

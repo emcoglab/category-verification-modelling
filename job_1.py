@@ -56,13 +56,19 @@ if __name__ == '__main__':
         jobs.append(Job_1(s))
 
     job_count = 0
-    for letter in ALPHABET:
+    for category_letter in ALPHABET.lower():
         for no_propagation in [True, False]:
-            for job in jobs:
-                extra_arguments = [f"--category_starts_with {letter}"]
-                if no_propagation:
-                    extra_arguments.append("--no_propagation")
-                job.submit(extra_arguments=extra_arguments)
-                job_count += 1
+            for validation_run in [True, False]:
+                for job in jobs:
+                    extra_arguments = [f"--category_starts_with {category_letter}"]
+                    if no_propagation: extra_arguments.append("--no_propagation")
+                    if validation_run: extra_arguments.append("--validation_run")
+                    if validation_run and category_letter == "c":
+                        for object_letter in ALPHABET.lower():
+                            job.submit(extra_arguments=extra_arguments + [f"--object_starts_with {object_letter}"])
+                            job_count += 1
+                    else:
+                        job.submit(extra_arguments=extra_arguments)
+                        job_count += 1
 
     print(f"Submitted {job_count} jobs.")
