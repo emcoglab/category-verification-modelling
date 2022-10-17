@@ -22,8 +22,9 @@ from __future__ import annotations
 import sys
 from copy import deepcopy
 from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from matplotlib import pyplot
 from numpy import trapz, isnan, nan
@@ -38,7 +39,8 @@ from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryObjectPair, Filter, \
     CategoryVerificationParticipantOriginal, CategoryVerificationParticipantReplication, \
-    CategoryVerificationItemData, CategoryVerificationItemDataBlockedValidation
+    CategoryVerificationItemData, CategoryVerificationItemDataBlockedValidation, \
+    CategoryVerificationParticipantBlockedValidation
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.figures import opacity_for_overlap, named_colour, RGBA
@@ -59,9 +61,30 @@ MODEL_PEAK_ACTIVATION = "Model peak post-SOA activation"
 ALPHABET = "abcdefghijklmnopqrstuvwxyz"
 
 
+# noinspection PyArgumentList
+# this is an IDE bug!
+class ParticipantDatasetSelection(Enum):
+    """Which participant dataset to use with ROC plotting."""
+    # Initial experiment
+    original = auto()  # Original participant set
+    replication = auto()  # Replication participant set
+    all = auto()  # Original and replication participant set
+    # Validation experiment
+    validation = auto()  # Validation participant set
+
+
+@dataclass
+class ParticipantPlotData:
+    """Data to be used to plot participant performance ROC curves."""
+    hit_rates: Series
+    fa_rates: Series
+    dataset_name: str
+    colour: str
+
+
 def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool,
-         participant_original_dataset: bool, participant_replication_dataset: bool,
+         participant_datasets: Optional[ParticipantDatasetSelection],
          no_propagation: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
@@ -84,15 +107,16 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     complete_file = Path(model_output_dir, " MODEL RUN COMPLETE")
     if not complete_file.exists():
         # Repair parallelised run completion files
-        for letter1 in ALPHABET.lower():
-            if all(Path(complete_file.parent, complete_file.name + letter1 + "_" + letter2).exists() for letter2 in ALPHABET.lower()):
-                Path(complete_file.parent, complete_file.name + letter1).touch()
+        if not all(Path(complete_file.parent, complete_file.name + letter).exists() for letter in ALPHABET.lower()):
+            for letter1 in ALPHABET.lower():
+                if all(Path(complete_file.parent, complete_file.name + letter1 + "_" + letter2).exists() for letter2 in ALPHABET.lower()):
+                    Path(complete_file.parent, complete_file.name + letter1).touch()
         if all(Path(complete_file.parent, complete_file.name + letter).exists() for letter in ALPHABET.lower()):
             logger.info(f"Parallelised model was complete, creating {complete_file.as_posix()}")
             complete_file.touch()
-        else:
-            logger.warning(f"Skipping incomplete model run: {complete_file.parent.as_posix()}")
-            return
+    if not complete_file.exists():
+        logger.warning(f"Skipping incomplete model run: {complete_file.parent.as_posix()}")
+        return
     save_dir = Path(model_output_dir, " evaluation")
     if save_dir.exists() and not overwrite:
         logger.info(f"Evaluation complete for {save_dir.as_posix()}")
@@ -207,22 +231,38 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
             model_false_alarm_rates.append(fa_rate)
 
         filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
-        if participant_original_dataset and participant_replication_dataset:
-            filename_prefix += " all participants"
-        elif participant_original_dataset:
-            filename_prefix += " original participants"
-        elif participant_replication_dataset:
-            filename_prefix += " replication participants"
+        if validation_run:
+            if participant_datasets == ParticipantDatasetSelection.validation:
+                filename_prefix += " validation participants"
+            elif participant_datasets is not None:
+                raise ValueError(participant_datasets)
+        else:
+            if participant_datasets == ParticipantDatasetSelection.all:
+                filename_prefix += " all participants"
+            elif participant_datasets == ParticipantDatasetSelection.original:
+                filename_prefix += " original participants"
+            elif participant_datasets == ParticipantDatasetSelection.replication:
+                filename_prefix += " replication participants"
+            elif participant_datasets is not None:
+                raise ValueError(participant_datasets)
         filename_suffix = cv_filter.name
 
+        # Participant hitrates
         participant_plot_datasets = []
-        if validation_run:
-            # Don't have participant data for this
-            pass
+        if validation_run and participant_datasets == ParticipantDatasetSelection.validation:
+                participant_dataset = CategoryVerificationParticipantBlockedValidation()
+                # TODO: don't just check it works, verify this line is doing the right thing
+                participant_summary_df = participant_dataset.participant_summary_dataframe(
+                    use_item_subset=CategoryVerificationItemDataBlockedValidation.list_category_object_pairs_from_dataframe(
+                        filtered_df))
+                participant_plot_datasets.append(
+                    ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
+                                        fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
+                                        dataset_name="validation", colour="forestgreen")
+                )
 
         else:
-            # Participant hitrates
-            if participant_original_dataset:
+            if participant_datasets in {ParticipantDatasetSelection.all, ParticipantDatasetSelection.original}:
                 participant_dataset = CategoryVerificationParticipantOriginal()
                 participant_summary_df = participant_dataset.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemData.list_category_object_pairs_from_dataframe(
@@ -232,7 +272,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
                                         dataset_name="original", colour="blueviolet")
                 )
-            if participant_replication_dataset:
+            if participant_datasets in {ParticipantDatasetSelection.all, ParticipantDatasetSelection.replication}:
                 participant_dataset = CategoryVerificationParticipantReplication()
                 participant_summary_df = participant_dataset.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemData.list_category_object_pairs_from_dataframe(
@@ -252,14 +292,6 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
         with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
             filtered_df.to_csv(f, index=False)
-
-
-@dataclass
-class ParticipantPlotData:
-    hit_rates: Series
-    fa_rates: Series
-    dataset_name: str
-    colour: str
 
 
 def performance_for_one_threshold_simplified(
@@ -361,16 +393,6 @@ if __name__ == '__main__':
 
     loaded_specs = []
     for sfn in [
-        # "2021-08-16 educated guesses.yaml",
-        # "2021-07-15 40k different decay.yaml",
-        # "2021-06-25 search for more sensible parameters.yaml",
-        # "2021-09-07 Finer search around a good model.yaml",
-        # "2021-09-14 Finer search around another good model.yaml",
-        # "2022-01-24 More variations on the current favourite.yaml",
-        # "2022-05-06 A slightly better one-threshold model.yaml",
-        # "2022-07-15 good roc-auc candidate.yaml",
-        # "2022-07-25 slower linguistic decay experiment.yaml",
-        # "2022-08-01 varying soa.yaml",
         "2022-08-20 good roc model with cut connections.yaml",
     ]:
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
@@ -386,8 +408,7 @@ if __name__ == '__main__':
                 restrict_to_answerable_items=True,
                 use_assumed_object_label=False,
                 validation_run=True,
-                participant_original_dataset=False,
-                participant_replication_dataset=False,
+                participant_datasets=ParticipantDatasetSelection.validation,
                 overwrite=True,
                 no_propagation=no_propagation,
             )
