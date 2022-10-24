@@ -40,7 +40,7 @@ from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryObjectPair, Filter, \
     CategoryVerificationParticipantOriginal, CategoryVerificationParticipantReplication, \
     CategoryVerificationItemData, CategoryVerificationItemDataBlockedValidation, \
-    CategoryVerificationParticipantBlockedValidation
+    CategoryVerificationParticipantBlockedValidation, CategoryVerificationItemDataReplication
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.figures import opacity_for_overlap, named_colour, RGBA
@@ -209,8 +209,22 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         # apply filters
         if validation_run:
             filtered_df = CategoryVerificationItemDataBlockedValidation().dataframe_filtered(cv_filter)
-        else:
+        elif participant_datasets == ParticipantDatasetSelection.original:
             filtered_df = CategoryVerificationItemData().dataframe_filtered(cv_filter)
+        elif participant_datasets == ParticipantDatasetSelection.replication:
+            filtered_df = CategoryVerificationItemDataReplication().dataframe_filtered(cv_filter)
+        elif participant_datasets == ParticipantDatasetSelection.all:
+            filtered_df = CategoryVerificationItemData().dataframe_filtered(cv_filter)
+            logger.warn("Participant-related values not yet correct when using all participants, these will be omitted.")
+            filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
+                                      ColNames.ResponseAccuracySD,
+                                      ColNames.ParticipantCount,
+                                      ColNames.ResponseRTMean,
+                                      ColNames.ResponseRTSD,
+                                      ],
+                             inplace=True)
+        else:
+            raise NotImplementedError()
 
         if restrict_to_answerable_items:
             filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1, allow_missing_objects=False)
@@ -250,16 +264,16 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         # Participant hitrates
         participant_plot_datasets = []
         if validation_run and participant_datasets == ParticipantDatasetSelection.validation:
-                participant_dataset = CategoryVerificationParticipantBlockedValidation()
                 # TODO: don't just check it works, verify this line is doing the right thing
-                participant_summary_df = participant_dataset.participant_summary_dataframe(
-                    use_item_subset=CategoryVerificationItemDataBlockedValidation.list_category_object_pairs_from_dataframe(
-                        filtered_df))
-                participant_plot_datasets.append(
-                    ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
-                                        fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="validation", colour="forestgreen")
-                )
+            participant_dataset = CategoryVerificationParticipantBlockedValidation()
+            participant_summary_df = participant_dataset.participant_summary_dataframe(
+                use_item_subset=CategoryVerificationItemDataBlockedValidation.list_category_object_pairs_from_dataframe(
+                    filtered_df))
+            participant_plot_datasets.append(
+                ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
+                                    fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
+                                    dataset_name="validation", colour="forestgreen")
+            )
 
         else:
             if participant_datasets in {ParticipantDatasetSelection.all, ParticipantDatasetSelection.original}:
