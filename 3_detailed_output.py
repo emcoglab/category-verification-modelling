@@ -31,7 +31,7 @@ from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import CategoryVerificationParticipantOriginal, \
-    CategoryVerificationItemData, CategoryObjectPair, ColNames, Filter
+    CategoryVerificationItemDataOriginal, CategoryObjectPair, ColNames, Filter
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.decision import make_model_decision_two_threshold, Outcome, make_all_model_decisions_two_thresholds, DecisionColNames
@@ -81,7 +81,7 @@ def plot_object_activation_traces(spec: CategoryVerificationJobSpec,
 
         model_outcome: Outcome = Outcome.from_decision(
             decision=model_decision,
-            should_be_yes=CategoryVerificationItemData().is_correct(category_label, object_label))
+            should_be_yes=CategoryVerificationItemDataOriginal().is_correct(category_label, object_label))
 
         # Determine correct axis
         if model_outcome == Outcome.Hit:
@@ -140,7 +140,7 @@ def categorise_errors(spec: CategoryVerificationJobSpec,
 
     # Add taxonomic level for all items
     model_guesses_df = model_guesses_df.merge(
-        CategoryVerificationItemData().dataframe_filtered(with_filter)[[
+        CategoryVerificationItemDataOriginal().dataframe_filtered(with_filter)[[
             ColNames.CategoryLabel, ColNames.ImageObject,
             # New columns to include
             ColNames.CategoryTaxonomicLevel, ColNames.EasyHardToReject,

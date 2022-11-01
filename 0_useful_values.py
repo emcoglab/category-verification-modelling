@@ -31,7 +31,7 @@ from framework.cognitive_model.ldm.utils.maths import DistanceType
 from framework.cognitive_model.propagator_linguistic import LinguisticPropagator
 from framework.cognitive_model.propagator_sensorimotor import SensorimotorPropagator
 from framework.cognitive_model.utils.logging import logger
-from framework.data.category_verification_data import CategoryVerificationItemData
+from framework.data.category_verification_data import CategoryVerificationItemDataOriginal
 from framework.data.substitution import substitutions_for
 
 
@@ -58,7 +58,7 @@ def pairwise_lengths(linguistic_length_factor: int, linguistic_words: int, senso
     )
 
     # Stimuli are the same for both datasets so it doesn't matter which we use here
-    cv_item_data = CategoryVerificationItemData()
+    cv_item_data = CategoryVerificationItemDataOriginal()
 
     min_sensorimotor_length, max_sensorimotor_length = inf, -inf
     min_linguistic_length, max_linguistic_length = inf, -inf

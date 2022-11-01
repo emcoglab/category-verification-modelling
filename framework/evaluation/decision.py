@@ -31,7 +31,7 @@ from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue, Component
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
-from framework.data.category_verification_data import ColNames, CategoryVerificationItemData, CategoryObjectPair, Filter
+from framework.data.category_verification_data import ColNames, CategoryVerificationItemDataOriginal, CategoryObjectPair, Filter
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 
@@ -256,8 +256,8 @@ def make_all_model_decisions_two_thresholds(all_model_data,
     """Make two-threshold decisions for all stimuli."""
 
     model_guesses = []
-    for category_label, object_label in CategoryVerificationItemData().category_object_pairs(with_filter):
-        item_is_of_category: bool = CategoryVerificationItemData().is_correct(category_label, object_label)
+    for category_label, object_label in CategoryVerificationItemDataOriginal().category_object_pairs(with_filter):
+        item_is_of_category: bool = CategoryVerificationItemDataOriginal().is_correct(category_label, object_label)
 
         try:
             model_data = all_model_data[CategoryObjectPair(category_label, object_label)]
@@ -303,7 +303,7 @@ def performance_for_two_thresholds(all_model_data: Dict[CategoryObjectPair, Data
     :param loglinear: use the loglinear transform for computing d' and criterion (but not for hitrate).
     """
 
-    ground_truth_dataframe = CategoryVerificationItemData().dataframe_filtered(with_filter)
+    ground_truth_dataframe = CategoryVerificationItemDataOriginal().dataframe_filtered(with_filter)
 
     model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data=all_model_data,
                                                                decision_threshold_yes=decision_threshold_yes, decision_threshold_no=decision_threshold_no,

@@ -34,7 +34,7 @@ from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokeni
 from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryVerificationParticipantOriginal, \
-    CategoryObjectPair, CategoryVerificationItemData, Filter
+    CategoryObjectPair, CategoryVerificationItemDataOriginal, Filter
 from framework.evaluation.decision import performance_for_two_thresholds
 from framework.evaluation.figures import save_heatmap
 from framework.evaluation.load import load_model_output_from_dir

@@ -5,7 +5,7 @@ from typing import Dict, Optional
 from pandas import DataFrame, read_csv
 
 from framework.evaluation.column_names import CLOCK
-from framework.data.category_verification_data import CategoryVerificationItemData, CategoryObjectPair, Filter, \
+from framework.data.category_verification_data import CategoryVerificationItemDataOriginal, CategoryObjectPair, Filter, \
     CategoryVerificationItemDataBlockedValidation
 
 _logger = getLogger(__file__)
@@ -20,7 +20,7 @@ def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label:
     if validation:
         category_item_pairs = CategoryVerificationItemDataBlockedValidation().category_object_pairs(with_filter)
     else:
-        category_item_pairs = CategoryVerificationItemData().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label)
+        category_item_pairs = CategoryVerificationItemDataOriginal().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label)
 
     # (object, item) -> model_data
     all_model_data: Dict[CategoryObjectPair, DataFrame] = dict()
