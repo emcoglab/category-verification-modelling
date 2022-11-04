@@ -30,6 +30,7 @@ from matplotlib import pyplot
 from numpy import trapz, isnan, nan
 from numpy.random import seed
 from pandas import DataFrame, Series
+from seaborn import jointplot
 
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
@@ -304,8 +305,25 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                  participant_area_colour="indigo",
                  )
 
+        plot_peak_activation_vs_affirmative_proportion(
+            filtered_df,
+            filename_prefix, filename_suffix, save_dir,
+        )
+
         with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
             filtered_df.to_csv(f, index=False)
+
+
+def plot_peak_activation_vs_affirmative_proportion(df: DataFrame, filename_prefix: str, filename_suffix: str, save_dir: Path) -> None:
+    from seaborn import set_theme
+    set_theme(style="darkgrid")  # Todo: globally
+
+    g = jointplot(data=df, x=ColNames.ResponseAffirmativeProportion, y=MODEL_PEAK_ACTIVATION,
+                  kind="reg", truncate=False,
+                  marginal_kws={"kde": False})
+
+    g.fig.savefig(str(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png")))
+    # g.fig.close()
 
 
 def performance_for_one_threshold_simplified(
