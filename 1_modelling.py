@@ -42,7 +42,7 @@ from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
 from framework.data.category_verification_data import CategoryVerificationItemDataOriginal, Filter, \
-    CategoryVerificationItemDataBlockedValidation
+    CategoryVerificationItemDataBlockedValidation, CategoryVerificationItemDataValidationBalanced
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
     CATEGORY_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f, OBJECT_ACTIVATION_SENSORIMOTOR_f
@@ -175,13 +175,15 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
     model.mapping.save_to(directory=response_dir)
 
     if validation_run:
-        cv_item_data = CategoryVerificationItemDataBlockedValidation()
-        category_object_pairs = cv_item_data.category_object_pairs()
+        category_object_pairs = CategoryVerificationItemDataBlockedValidation().category_object_pairs()
+        # Add only the new ones in
+        for cop in CategoryVerificationItemDataValidationBalanced().category_object_pairs():
+            if cop not in category_object_pairs:
+                category_object_pairs.append(cop)
     else:
-        cv_item_data = CategoryVerificationItemDataOriginal()
-        category_object_pairs = cv_item_data.category_object_pairs()
+        category_object_pairs = CategoryVerificationItemDataOriginal().category_object_pairs()
         # Add items using the assumed object label rather than the always-subordinate object label
-        category_object_pairs += cv_item_data.category_object_pairs(
+        category_object_pairs += CategoryVerificationItemDataOriginal().category_object_pairs(
             use_assumed_object_label=True,
             with_filter=Filter("differently assumed", assumed_object_label_differs=True))
 

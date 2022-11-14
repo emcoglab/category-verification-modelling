@@ -41,7 +41,8 @@ from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import ColNames, CategoryObjectPair, Filter, \
     CategoryVerificationParticipantOriginal, CategoryVerificationParticipantReplication, \
     CategoryVerificationItemDataOriginal, CategoryVerificationItemDataBlockedValidation, \
-    CategoryVerificationParticipantBlockedValidation, CategoryVerificationItemDataReplication
+    CategoryVerificationParticipantBlockedValidation, CategoryVerificationItemDataReplication, \
+    CategoryVerificationParticipantBalancedValidation
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.figures import opacity_for_overlap, named_colour, RGBA
@@ -64,14 +65,16 @@ ALPHABET = "abcdefghijklmnopqrstuvwxyz"
 
 # noinspection PyArgumentList
 # this is an IDE bug!
-class ParticipantDatasetSelection(Enum):
+class ParticipantDataset(Enum):
     """Which participant dataset to use with ROC plotting."""
+    # All or none
+    all = auto()  # Both participant sets for either study
     # Initial experiment
     original = auto()  # Original participant set
     replication = auto()  # Replication participant set
-    all = auto()  # Original and replication participant set
     # Validation experiment
     validation = auto()  # Validation participant set
+    balanced = auto()  # Validation (balanced study) participant set
 
 
 @dataclass
@@ -85,7 +88,7 @@ class ParticipantPlotData:
 
 def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool,
-         participant_datasets: Optional[ParticipantDatasetSelection],
+         participant_datasets: Optional[ParticipantDataset],
          no_propagation: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
@@ -210,11 +213,11 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         # apply filters
         if validation_run:
             filtered_df = CategoryVerificationItemDataBlockedValidation().dataframe_filtered(cv_filter)
-        elif participant_datasets == ParticipantDatasetSelection.original:
+        elif participant_datasets == ParticipantDataset.original:
             filtered_df = CategoryVerificationItemDataOriginal().dataframe_filtered(cv_filter)
-        elif participant_datasets == ParticipantDatasetSelection.replication:
+        elif participant_datasets == ParticipantDataset.replication:
             filtered_df = CategoryVerificationItemDataReplication().dataframe_filtered(cv_filter)
-        elif participant_datasets == ParticipantDatasetSelection.all:
+        elif participant_datasets == ParticipantDataset.all:
             filtered_df = CategoryVerificationItemDataOriginal().dataframe_filtered(cv_filter)
             logger.warn("Participant-related values not yet correct when using all participants, these will be omitted.")
             filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
@@ -247,16 +250,20 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
         filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
         if validation_run:
-            if participant_datasets == ParticipantDatasetSelection.validation:
+            if participant_datasets == ParticipantDataset.all:
+                filename_prefix += " all participants"
+            elif participant_datasets == ParticipantDataset.validation:
                 filename_prefix += " validation participants"
+            elif participant_datasets == ParticipantDataset.balanced:
+                filename_prefix += " balanced participants"
             elif participant_datasets is not None:
                 raise ValueError(participant_datasets)
         else:
-            if participant_datasets == ParticipantDatasetSelection.all:
+            if participant_datasets == ParticipantDataset.all:
                 filename_prefix += " all participants"
-            elif participant_datasets == ParticipantDatasetSelection.original:
+            elif participant_datasets == ParticipantDataset.original:
                 filename_prefix += " original participants"
-            elif participant_datasets == ParticipantDatasetSelection.replication:
+            elif participant_datasets == ParticipantDataset.replication:
                 filename_prefix += " replication participants"
             elif participant_datasets is not None:
                 raise ValueError(participant_datasets)
@@ -264,20 +271,31 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
         # Participant hitrates
         participant_plot_datasets = []
-        if validation_run and participant_datasets == ParticipantDatasetSelection.validation:
-            participant_dataset = CategoryVerificationParticipantBlockedValidation()
-            # TODO: don't just check it appears to work, verify this line is doing the right thing
-            participant_summary_df = participant_dataset.participant_summary_dataframe(
-                use_item_subset=CategoryVerificationItemDataBlockedValidation.list_category_object_pairs_from_dataframe(
-                    filtered_df))
-            participant_plot_datasets.append(
-                ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
-                                    fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                    dataset_name="validation", colour="forestgreen")
-            )
+        if validation_run:
+            if participant_datasets in {ParticipantDataset.validation, ParticipantDataset.all}:
+                participant_dataset = CategoryVerificationParticipantBlockedValidation()
+                # TODO: don't just check it appears to work, verify this line is doing the right thing
+                participant_summary_df = participant_dataset.participant_summary_dataframe(
+                    use_item_subset=CategoryVerificationItemDataBlockedValidation.list_category_object_pairs_from_dataframe(
+                        filtered_df))
+                participant_plot_datasets.append(
+                    ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
+                                        fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
+                                        dataset_name="validation", colour="forestgreen")
+                )
+            if participant_datasets in {ParticipantDataset.balanced, ParticipantDataset.all}:
+                participant_dataset = CategoryVerificationParticipantBalancedValidation()
+                participant_summary_df = participant_dataset.participant_summary_dataframe(
+                    use_item_subset=CategoryVerificationItemDataBlockedValidation.list_category_object_pairs_from_dataframe(
+                        filtered_df))
+                participant_plot_datasets.append(
+                    ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
+                                        fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
+                                        dataset_name="balanced", colour="lightseagreen")
+                )
 
         else:
-            if participant_datasets in {ParticipantDatasetSelection.all, ParticipantDatasetSelection.original}:
+            if participant_datasets in {ParticipantDataset.original, ParticipantDataset.all}:
                 participant_dataset = CategoryVerificationParticipantOriginal()
                 participant_summary_df = participant_dataset.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemDataOriginal.list_category_object_pairs_from_dataframe(
@@ -287,7 +305,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
                                         dataset_name="original", colour="blueviolet")
                 )
-            if participant_datasets in {ParticipantDatasetSelection.all, ParticipantDatasetSelection.replication}:
+            if participant_datasets in {ParticipantDataset.replication, ParticipantDataset.all}:
                 participant_dataset = CategoryVerificationParticipantReplication()
                 participant_summary_df = participant_dataset.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemDataOriginal.list_category_object_pairs_from_dataframe(
@@ -440,7 +458,7 @@ if __name__ == '__main__':
                 restrict_to_answerable_items=True,
                 use_assumed_object_label=False,
                 validation_run=True,
-                participant_datasets=ParticipantDatasetSelection.validation,
+                participant_datasets=ParticipantDataset.balanced,
                 overwrite=True,
                 no_propagation=no_propagation,
             )
