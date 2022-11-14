@@ -42,7 +42,7 @@ from framework.data.category_verification_data import ColNames, CategoryObjectPa
     CategoryVerificationParticipantOriginal, CategoryVerificationParticipantReplication, \
     CategoryVerificationItemDataOriginal, CategoryVerificationItemDataBlockedValidation, \
     CategoryVerificationParticipantBlockedValidation, CategoryVerificationItemDataReplication, \
-    CategoryVerificationParticipantBalancedValidation
+    CategoryVerificationParticipantBalancedValidation, CategoryVerificationItemDataValidationBalanced
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.figures import opacity_for_overlap, named_colour, RGBA
@@ -134,6 +134,12 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     filters: List[Filter] = [
         Filter(
+            name="both" if not use_assumed_object_label else "both (assumed image label)",
+            category_taxonomic_levels=["superordinate", "basic"],
+            trial_types=trial_types,
+            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
+            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
+        Filter(
             name="superordinate" if not use_assumed_object_label else "superordinate (assumed image label)",
             category_taxonomic_levels=["superordinate"],
             trial_types=trial_types,
@@ -142,12 +148,6 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         Filter(
             name="basic" if not use_assumed_object_label else "basic (assumed image label)",
             category_taxonomic_levels=["basic"],
-            trial_types=trial_types,
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
-            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
-        Filter(
-            name="both" if not use_assumed_object_label else "both (assumed image label)",
-            category_taxonomic_levels=["superordinate", "basic"],
             trial_types=trial_types,
             repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
             use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
@@ -212,23 +212,29 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
         # apply filters
         if validation_run:
-            filtered_df = CategoryVerificationItemDataBlockedValidation().dataframe_filtered(cv_filter)
-        elif participant_datasets == ParticipantDataset.original:
-            filtered_df = CategoryVerificationItemDataOriginal().dataframe_filtered(cv_filter)
-        elif participant_datasets == ParticipantDataset.replication:
-            filtered_df = CategoryVerificationItemDataReplication().dataframe_filtered(cv_filter)
-        elif participant_datasets == ParticipantDataset.all:
-            filtered_df = CategoryVerificationItemDataOriginal().dataframe_filtered(cv_filter)
-            logger.warn("Participant-related values not yet correct when using all participants, these will be omitted.")
-            filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
-                                      ColNames.ResponseAccuracySD,
-                                      ColNames.ParticipantCount,
-                                      ColNames.ResponseRTMean,
-                                      ColNames.ResponseRTSD,
-                                      ],
-                             inplace=True)
+            if participant_datasets == ParticipantDataset.validation:
+                filtered_df = CategoryVerificationItemDataBlockedValidation().dataframe_filtered(cv_filter)
+            elif participant_datasets == ParticipantDataset.balanced:
+                filtered_df = CategoryVerificationItemDataValidationBalanced().dataframe_filtered(cv_filter)
+            else:
+                raise NotImplementedError()
         else:
-            raise NotImplementedError()
+            if participant_datasets == ParticipantDataset.original:
+                filtered_df = CategoryVerificationItemDataOriginal().dataframe_filtered(cv_filter)
+            elif participant_datasets == ParticipantDataset.replication:
+                filtered_df = CategoryVerificationItemDataReplication().dataframe_filtered(cv_filter)
+            elif participant_datasets == ParticipantDataset.all:
+                filtered_df = CategoryVerificationItemDataOriginal().dataframe_filtered(cv_filter)
+                logger.warn("Participant-related values not yet correct when using all participants, these will be omitted.")
+                filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
+                                          ColNames.ResponseAccuracySD,
+                                          ColNames.ParticipantCount,
+                                          ColNames.ResponseRTMean,
+                                          ColNames.ResponseRTSD,
+                                          ],
+                                 inplace=True)
+            else:
+                raise NotImplementedError()
 
         if restrict_to_answerable_items:
             filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1, allow_missing_objects=False)
@@ -448,9 +454,10 @@ if __name__ == '__main__':
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
             Path(Path(__file__).parent, "job_specifications", sfn)))])
 
+    spec: CategoryVerificationJobSpec
     for j, (spec, sfn, i) in enumerate(loaded_specs, start=1):
         logger.info(f"Evaluating model {j} of {len(loaded_specs)}")
-        for no_propagation in [True, False]:
+        for no_propagation in [False, True]:
             main(
                 spec=spec,
                 spec_filename=f"{sfn} [{i}]",
