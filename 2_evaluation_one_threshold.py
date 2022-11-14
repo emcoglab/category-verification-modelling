@@ -341,7 +341,7 @@ def plot_peak_activation_vs_affirmative_proportion(df: DataFrame, filename_prefi
                   marginal_kws={"kde": False})
 
     g.fig.savefig(str(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png")))
-    # g.fig.close()
+    pyplot.close(g.fig)
 
 
 def performance_for_one_threshold_simplified(
