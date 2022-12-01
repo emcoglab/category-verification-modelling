@@ -6,21 +6,34 @@ from pandas import DataFrame, read_csv
 
 from framework.evaluation.column_names import CLOCK
 from framework.data.category_verification_data import CategoryVerificationItemDataOriginal, CategoryObjectPair, Filter, \
-    CategoryVerificationItemDataBlockedValidation
+    CategoryVerificationItemDataBlockedValidation, CategoryVerificationItemDataValidationBalanced, \
+    CategoryVerificationItemDataReplication
+from framework.evaluation.datasets import ParticipantDataset
+
 
 _logger = getLogger(__file__)
 
 
-def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, validation: bool, with_filter: Optional[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
+def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, validation: bool, participant_datasets: ParticipantDataset, with_filter: Optional[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
     """
     Returns a CategoryObjectPair-keyed dictionary of activation traces.
     """
     _logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
 
     if validation:
-        category_item_pairs = CategoryVerificationItemDataBlockedValidation().category_object_pairs(with_filter)
+        if participant_datasets == ParticipantDataset.validation:
+            category_item_pairs = CategoryVerificationItemDataBlockedValidation().category_object_pairs(with_filter)
+        elif participant_datasets == ParticipantDataset.balanced:
+            category_item_pairs = CategoryVerificationItemDataValidationBalanced().category_object_pairs(with_filter)
+        else:
+            raise NotImplementedError()
     else:
-        category_item_pairs = CategoryVerificationItemDataOriginal().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label)
+        if participant_datasets == ParticipantDataset.original:
+            category_item_pairs = CategoryVerificationItemDataOriginal().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label)
+        elif participant_datasets == ParticipantDataset.replication:
+            category_item_pairs = CategoryVerificationItemDataReplication().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label)
+        else:
+            raise NotImplementedError()
 
     # (object, item) -> model_data
     all_model_data: Dict[CategoryObjectPair, DataFrame] = dict()

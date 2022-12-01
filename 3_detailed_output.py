@@ -140,7 +140,7 @@ def categorise_errors(spec: CategoryVerificationJobSpec,
 
     # Add taxonomic level for all items
     model_guesses_df = model_guesses_df.merge(
-        CategoryVerificationItemDataOriginal().dataframe_filtered(with_filter)[[
+        CategoryVerificationItemDataOriginal().data_filtered(with_filter)[[
             ColNames.CategoryLabel, ColNames.ImageObject,
             # New columns to include
             ColNames.CategoryTaxonomicLevel, ColNames.EasyHardToReject,

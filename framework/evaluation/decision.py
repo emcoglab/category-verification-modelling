@@ -303,7 +303,7 @@ def performance_for_two_thresholds(all_model_data: Dict[CategoryObjectPair, Data
     :param loglinear: use the loglinear transform for computing d' and criterion (but not for hitrate).
     """
 
-    ground_truth_dataframe = CategoryVerificationItemDataOriginal().dataframe_filtered(with_filter)
+    ground_truth_dataframe = CategoryVerificationItemDataOriginal().data_filtered(with_filter)
 
     model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data=all_model_data,
                                                                decision_threshold_yes=decision_threshold_yes, decision_threshold_no=decision_threshold_no,

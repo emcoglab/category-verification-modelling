@@ -22,7 +22,6 @@ from __future__ import annotations
 import sys
 from copy import deepcopy
 from dataclasses import dataclass
-from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
@@ -31,6 +30,7 @@ from numpy import trapz, isnan, nan
 from numpy.random import seed
 from pandas import DataFrame, Series
 from seaborn import jointplot
+from statsmodels.stats.inter_rater import fleiss_kappa
 
 from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
@@ -45,6 +45,7 @@ from framework.data.category_verification_data import ColNames, CategoryObjectPa
     CategoryVerificationParticipantBalancedValidation, CategoryVerificationItemDataValidationBalanced
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
+from framework.evaluation.datasets import ParticipantDataset
 from framework.evaluation.figures import opacity_for_overlap, named_colour, RGBA
 from framework.evaluation.load import load_model_output_from_dir
 
@@ -61,20 +62,6 @@ MODEL_GUESS = "Model guessd"
 MODEL_PEAK_ACTIVATION = "Model peak post-SOA activation"
 
 ALPHABET = "abcdefghijklmnopqrstuvwxyz"
-
-
-# noinspection PyArgumentList
-# this is an IDE bug!
-class ParticipantDataset(Enum):
-    """Which participant dataset to use with ROC plotting."""
-    # All or none
-    all = auto()  # Both participant sets for either study
-    # Initial experiment
-    original = auto()  # Original participant set
-    replication = auto()  # Replication participant set
-    # Validation experiment
-    validation = auto()  # Validation participant set
-    balanced = auto()  # Validation (balanced study) participant set
 
 
 @dataclass
@@ -169,7 +156,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 filters.append(new_filter)
 
     # Add model peak activations
-    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, use_assumed_object_label=use_assumed_object_label)
+    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, participant_datasets=participant_datasets, use_assumed_object_label=use_assumed_object_label)
 
     def get_peak_activation(row, *, allow_missing_objects: bool) -> float:
         item_col = ColNames.ImageLabelAssumed if use_assumed_object_label else ColNames.ImageObject
@@ -208,23 +195,43 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         else:
             return max(ac for ac in [peak_activation_linguistic, peak_activation_sensorimotor] if not isnan(ac))
 
+    filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
+    if validation_run:
+        if participant_datasets == ParticipantDataset.all:
+            filename_prefix += " all participants"
+        elif participant_datasets == ParticipantDataset.validation:
+            filename_prefix += " validation participants"
+        elif participant_datasets == ParticipantDataset.balanced:
+            filename_prefix += " balanced participants"
+        elif participant_datasets is not None:
+            raise ValueError(participant_datasets)
+    else:
+        if participant_datasets == ParticipantDataset.all:
+            filename_prefix += " all participants"
+        elif participant_datasets == ParticipantDataset.original:
+            filename_prefix += " original participants"
+        elif participant_datasets == ParticipantDataset.replication:
+            filename_prefix += " replication participants"
+        elif participant_datasets is not None:
+            raise ValueError(participant_datasets)
+
     for cv_filter in filters:
 
         # apply filters
         if validation_run:
             if participant_datasets == ParticipantDataset.validation:
-                filtered_df = CategoryVerificationItemDataBlockedValidation().dataframe_filtered(cv_filter)
+                filtered_df = CategoryVerificationItemDataBlockedValidation().data_filtered(cv_filter)
             elif participant_datasets == ParticipantDataset.balanced:
-                filtered_df = CategoryVerificationItemDataValidationBalanced().dataframe_filtered(cv_filter)
+                filtered_df = CategoryVerificationItemDataValidationBalanced().data_filtered(cv_filter)
             else:
                 raise NotImplementedError()
         else:
             if participant_datasets == ParticipantDataset.original:
-                filtered_df = CategoryVerificationItemDataOriginal().dataframe_filtered(cv_filter)
+                filtered_df = CategoryVerificationItemDataOriginal().data_filtered(cv_filter)
             elif participant_datasets == ParticipantDataset.replication:
-                filtered_df = CategoryVerificationItemDataReplication().dataframe_filtered(cv_filter)
+                filtered_df = CategoryVerificationItemDataReplication().data_filtered(cv_filter)
             elif participant_datasets == ParticipantDataset.all:
-                filtered_df = CategoryVerificationItemDataOriginal().dataframe_filtered(cv_filter)
+                filtered_df = CategoryVerificationItemDataOriginal().data_filtered(cv_filter)
                 logger.warn("Participant-related values not yet correct when using all participants, these will be omitted.")
                 filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
                                           ColNames.ResponseAccuracySD,
@@ -253,26 +260,6 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 strict_inequality=True)
             model_hit_rates.append(hit_rate)
             model_false_alarm_rates.append(fa_rate)
-
-        filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
-        if validation_run:
-            if participant_datasets == ParticipantDataset.all:
-                filename_prefix += " all participants"
-            elif participant_datasets == ParticipantDataset.validation:
-                filename_prefix += " validation participants"
-            elif participant_datasets == ParticipantDataset.balanced:
-                filename_prefix += " balanced participants"
-            elif participant_datasets is not None:
-                raise ValueError(participant_datasets)
-        else:
-            if participant_datasets == ParticipantDataset.all:
-                filename_prefix += " all participants"
-            elif participant_datasets == ParticipantDataset.original:
-                filename_prefix += " original participants"
-            elif participant_datasets == ParticipantDataset.replication:
-                filename_prefix += " replication participants"
-            elif participant_datasets is not None:
-                raise ValueError(participant_datasets)
         filename_suffix = cv_filter.name
 
         # Participant hitrates
@@ -336,6 +323,49 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
         with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
             filtered_df.to_csv(f, index=False)
+
+    agreement_path: Path = Path(save_dir, f"{filename_prefix} agreement.csv")
+    participant_agreement(validation_run, participant_datasets, agreement_path)
+
+
+def participant_agreement(validation_run: bool, participant_datasets: ParticipantDataset, agreement_path: Path):
+
+    # Haven't done these yet!
+    if not validation_run:
+        raise NotImplementedError()
+    if participant_datasets != ParticipantDataset.balanced:
+        raise NotImplementedError()
+
+    item_data = CategoryVerificationItemDataValidationBalanced()
+    participant_data = CategoryVerificationParticipantBalancedValidation().data
+
+    agreements = []
+    for list_i, list_data in item_data.item_data_by_list.items():
+        trials_in_list = participant_data.merge(
+            right=list_data[[ColNames.CategoryLabel, ColNames.ImageObject, ColNames.List]],
+            on=[ColNames.CategoryLabel, ColNames.ImageObject, ColNames.List],
+            how="right")
+        agreements.append({
+            "List": list_i,
+            "Fleiss' kappa": __compute_kappa(trials_in_list)
+        })
+    with agreement_path.open("w") as f:
+        DataFrame(agreements).to_csv(f, index=False)
+
+
+def __compute_kappa(trials_in_list: DataFrame) -> float:
+    trials_in_list = trials_in_list.copy()
+    trials_in_list["yes"] = trials_in_list[ColNames.Response]
+    trials_in_list["no"] = ~trials_in_list[ColNames.Response]
+    # Needs to to have "subjects" (i.e. items) as rows and "categories" (i.e. responses) as columns, with cells
+    # containing counts of ratings
+    d = trials_in_list.groupby([ColNames.CategoryLabel, ColNames.ImageObject])[["yes", "no"]].sum()
+    # Drop rows containing incomplete data
+    d["either"] = d["yes"] + d["no"]
+    d = d[d["either"] == d["either"].max()]
+    # noinspection NonAsciiCharacters
+    κ = fleiss_kappa(d[["yes", "no"]].to_numpy(), method="fleiss")
+    return κ
 
 
 def plot_peak_activation_vs_affirmative_proportion(df: DataFrame, filename_prefix: str, filename_suffix: str, save_dir: Path) -> None:
