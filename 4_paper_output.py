@@ -75,7 +75,7 @@ class ParticipantPlotData:
     symbol: str
 
 
-def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
+def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool,
          participant_datasets: Optional[ParticipantDataset],
          no_propagation: bool, overwrite: bool):
@@ -86,7 +86,6 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     """
 
     logger.info("")
-    logger.info(f"Spec: {spec_filename}")
 
     # Determine directory paths with optional tests for early exit
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
@@ -483,21 +482,19 @@ def plot_roc(model_hit_rates, model_fa_rates,
 class ArgSet:
     validation_run: bool
     participant_datasets: Optional[ParticipantDataset]
+    
     exclude_repeated_items: bool = True
     restrict_to_answerable_items: bool = True
     use_assumed_object_label: bool = False
 
+    overwrite: bool = True
+
 
 # noinspection DuplicatedCode
 if __name__ == '__main__':
-    logger.info("Running %s" % " ".join(sys.argv))
-
     seed(1)  # Reproducible results
 
-    loaded_specs = []
-    for sfn in ["2023-01-12 Paper output.yaml"]:
-        loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
-            Path(Path(__file__).parent, "job_specifications", sfn)))])
+    logger.info("Running %s" % " ".join(sys.argv))
 
     arg_sets: List[ArgSet] = [
         ArgSet(validation_run=False, participant_datasets=ParticipantDataset.original),
@@ -507,17 +504,14 @@ if __name__ == '__main__':
         ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.balanced),
     ]
 
-    spec: CategoryVerificationJobSpec
-    for j, (spec, sfn, i) in enumerate(loaded_specs, start=1):
-        logger.info(f"Evaluating model {j} of {len(loaded_specs)}")
-        for arg_set in arg_sets:
-            for no_propagation in [False, True]:
-                main(
-                    spec=spec,
-                    spec_filename=f"{sfn} [{i}]",
-                    overwrite=True,
-                    no_propagation=no_propagation,
-                    **asdict(arg_set),
-                )
+    loaded_specs = CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
+                                                                  "job_specifications",
+                                                                  "2023-01-12 Paper output.yaml"))
+    prop_spec: CategoryVerificationJobSpec = loaded_specs[0]
+    no_prop_spec: CategoryVerificationJobSpec = loaded_specs[1]
+
+    for arg_set in arg_sets:
+        main(spec=prop_spec,    no_propagation=False, **asdict(arg_set))
+        main(spec=no_prop_spec, no_propagation=True,  **asdict(arg_set))
 
     logger.info("Done!")
