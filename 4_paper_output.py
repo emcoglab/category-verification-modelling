@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import sys
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
@@ -336,10 +336,9 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 def participant_agreement(validation_run: bool, participant_datasets: ParticipantDataset, agreement_path: Path):
 
     # Haven't done these yet!
-    if not validation_run:
-        raise NotImplementedError()
-    if participant_datasets != ParticipantDataset.balanced:
-        raise NotImplementedError()
+    if not validation_run or  participant_datasets != ParticipantDataset.balanced:
+        logger.warn("Skipping participant-agreement calculation for this dataset, not yet implemented!")
+        return
 
     item_data = CategoryVerificationItemDataValidationBalanced()
     participant_data = CategoryVerificationParticipantBalancedValidation().data
@@ -476,6 +475,15 @@ def plot_roc(model_hit_rates, model_fa_rates,
     pyplot.close(fig)
 
 
+@dataclass
+class ArgSet:
+    validation_run: bool
+    participant_datasets: Optional[ParticipantDataset]
+    exclude_repeated_items: bool = True
+    restrict_to_answerable_items: bool = True
+    use_assumed_object_label: bool = False
+
+
 # noinspection DuplicatedCode
 if __name__ == '__main__':
     logger.info("Running %s" % " ".join(sys.argv))
@@ -487,20 +495,25 @@ if __name__ == '__main__':
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
             Path(Path(__file__).parent, "job_specifications", sfn)))])
 
+    arg_sets: List[ArgSet] = [
+        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.original),
+        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.replication),
+        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.original_plus_replication),
+        ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.validation),
+        ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.balanced),
+    ]
+
     spec: CategoryVerificationJobSpec
     for j, (spec, sfn, i) in enumerate(loaded_specs, start=1):
         logger.info(f"Evaluating model {j} of {len(loaded_specs)}")
-        for no_propagation in [False, True]:
-            main(
-                spec=spec,
-                spec_filename=f"{sfn} [{i}]",
-                exclude_repeated_items=True,
-                restrict_to_answerable_items=True,
-                use_assumed_object_label=False,
-                validation_run=True,
-                participant_datasets=ParticipantDataset.balanced,
-                overwrite=True,
-                no_propagation=no_propagation,
-            )
+        for arg_set in arg_sets:
+            for no_propagation in [False, True]:
+                main(
+                    spec=spec,
+                    spec_filename=f"{sfn} [{i}]",
+                    overwrite=True,
+                    no_propagation=no_propagation,
+                    **asdict(arg_set),
+                )
 
     logger.info("Done!")

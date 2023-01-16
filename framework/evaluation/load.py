@@ -28,12 +28,10 @@ def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label:
         else:
             raise NotImplementedError()
     else:
-        if participant_datasets == ParticipantDataset.original:
-            category_item_pairs = CategoryVerificationItemDataOriginal().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label)
-        elif participant_datasets == ParticipantDataset.replication:
-            category_item_pairs = CategoryVerificationItemDataReplication().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label)
-        else:
-            raise NotImplementedError()
+        # It doesn't matter which we pick
+        assert CategoryVerificationItemDataOriginal().category_object_pairs() == CategoryVerificationItemDataReplication().category_object_pairs()
+
+        category_item_pairs = CategoryVerificationItemDataOriginal().category_object_pairs(with_filter, use_assumed_object_label=use_assumed_object_label)
 
     # (object, item) -> model_data
     all_model_data: Dict[CategoryObjectPair, DataFrame] = dict()
