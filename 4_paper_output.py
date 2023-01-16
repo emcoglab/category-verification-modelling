@@ -29,7 +29,7 @@ from matplotlib import pyplot
 from numpy import trapz, isnan, nan
 from numpy.random import seed
 from pandas import DataFrame, Series
-from seaborn import jointplot
+from seaborn import jointplot, set_theme
 from statsmodels.stats.inter_rater import fleiss_kappa
 
 from framework.cli.job import CategoryVerificationJobSpec
@@ -72,6 +72,7 @@ class ParticipantPlotData:
     fa_rates: Series
     dataset_name: str
     colour: str
+    symbol: str
 
 
 def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
@@ -237,7 +238,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 filtered_df = CategoryVerificationItemDataReplication().data_filtered(cv_filter)
             elif participant_datasets == ParticipantDataset.original_plus_replication:
                 filtered_df = CategoryVerificationItemDataOriginal().data_filtered(cv_filter)
-                logger.warn("Participant-related values not yet correct when using all participants, these will be omitted.")
+                logger.warning("Participant-related values not yet correct when using all participants, these will be omitted.")
                 filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
                                           ColNames.ResponseAccuracySD,
                                           ColNames.ParticipantCount,
@@ -279,7 +280,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="validation", colour="forestgreen")
+                                        dataset_name="validation", colour="forestgreen", symbol="+")
                 )
             if participant_datasets in {ParticipantDataset.balanced, ParticipantDataset.validation_plus_balanced}:
                 participant_dataset = CategoryVerificationParticipantBalancedValidation()
@@ -289,7 +290,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="balanced", colour="lightseagreen")
+                                        dataset_name="balanced", colour="lightseagreen", symbol="x")
                 )
 
         else:
@@ -301,7 +302,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="original", colour="blueviolet")
+                                        dataset_name="original", colour="blueviolet", symbol="+")
                 )
             if participant_datasets in {ParticipantDataset.replication, ParticipantDataset.original_plus_replication}:
                 participant_dataset = CategoryVerificationParticipantReplication()
@@ -311,7 +312,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="replication", colour="mediumvioletred")
+                                        dataset_name="replication", colour="mediumvioletred", symbol="x")
                 )
 
         plot_roc(model_hit_rates, model_false_alarm_rates,
@@ -337,7 +338,7 @@ def participant_agreement(validation_run: bool, participant_datasets: Participan
 
     # Haven't done these yet!
     if not validation_run or  participant_datasets != ParticipantDataset.balanced:
-        logger.warn("Skipping participant-agreement calculation for this dataset, not yet implemented!")
+        logger.warning("Skipping participant-agreement calculation for this dataset, not yet implemented!")
         return
 
     item_data = CategoryVerificationItemDataValidationBalanced()
@@ -357,6 +358,7 @@ def participant_agreement(validation_run: bool, participant_datasets: Participan
         DataFrame(agreements).to_csv(f, index=False)
 
 
+# todo: extract duplicate
 def __compute_kappa(trials_in_list: DataFrame) -> float:
     trials_in_list = trials_in_list.copy()
     trials_in_list["yes"] = trials_in_list[ColNames.Response]
@@ -373,14 +375,13 @@ def __compute_kappa(trials_in_list: DataFrame) -> float:
 
 
 def plot_peak_activation_vs_affirmative_proportion(df: DataFrame, filename_prefix: str, filename_suffix: str, save_dir: Path) -> None:
-    from seaborn import set_theme
-    set_theme(style="darkgrid")  # Todo: globally
+    set_theme(style="darkgrid")
 
     g = jointplot(data=df, x=ColNames.ResponseAffirmativeProportion, y=MODEL_PEAK_ACTIVATION,
                   kind="reg", truncate=False,
                   marginal_kws={"kde": False})
 
-    g.fig.savefig(str(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png")))
+    g.fig.savefig(str(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png")), dpi=1200, bbox_inches='tight')
     pyplot.close(g.fig)
 
 
@@ -420,6 +421,8 @@ def plot_roc(model_hit_rates, model_fa_rates,
              filename_prefix, filename_suffix, save_dir,
              model_colour: str, participant_area_colour: str):
 
+    set_theme(style="whitegrid")
+
     fig, ax = pyplot.subplots()
 
     # AUC
@@ -440,7 +443,7 @@ def plot_roc(model_hit_rates, model_fa_rates,
         for participant_plot_data in participant_plot_datasets:
             # Participant points
             pyplot.plot(participant_plot_data.fa_rates, participant_plot_data.hit_rates,
-                        "+", color=participant_plot_data.colour)
+                        participant_plot_data.symbol, color=participant_plot_data.colour)
             # Participant mean spline interpolation
             # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
             # Participant linearly interpolated areas
@@ -468,10 +471,11 @@ def plot_roc(model_hit_rates, model_fa_rates,
                  f" {auc:.2}"
                  f"{ppt_title_clause})"
                  )
+    ax.set_aspect('equal')
     pyplot.legend(legend_items)
 
-    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.png", dpi=1200))
-    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.svg", dpi=1200))
+    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.png"), dpi=1200 ,bbox_inches='tight')
+    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.svg"), dpi=1200 ,bbox_inches='tight')
     pyplot.close(fig)
 
 
