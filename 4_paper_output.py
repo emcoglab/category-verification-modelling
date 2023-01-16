@@ -52,6 +52,7 @@ from framework.evaluation.load import load_model_output_from_dir
 
 # Paths
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
+OUTPUT_DIR = Path("/Users/caiwingfield/Resilio Sync/Lancaster/ Current/CV output")
 
 # Shared
 _n_threshold_steps = 10
@@ -88,10 +89,15 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     # Determine directory paths with optional tests for early exit
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
+    save_dir = Path(OUTPUT_DIR, spec.output_location_relative())
     if no_propagation:
         model_output_dir = Path(model_output_dir.parent, model_output_dir.name + "_no_propagation")
+        save_dir = Path(save_dir.parent, save_dir.name + "_no_propagation")
     if validation_run:
         model_output_dir = Path(model_output_dir, "validation")
+        save_dir = Path(save_dir, "validation")
+    else:
+        save_dir = Path(save_dir, "original")
     if not model_output_dir.exists():
         logger.warning(f"Model output not found for v{VERSION} in directory {model_output_dir.as_posix()}")
         return
@@ -108,11 +114,10 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     if not complete_file.exists():
         logger.warning(f"Skipping incomplete model run: {complete_file.parent.as_posix()}")
         return
-    save_dir = Path(model_output_dir, " evaluation")
     if save_dir.exists() and not overwrite:
         logger.info(f"Evaluation complete for {save_dir.as_posix()}")
         return
-    save_dir.mkdir(parents=False, exist_ok=True)
+    save_dir.mkdir(parents=True, exist_ok=True)
 
     if validation_run:
         trial_types = None
@@ -478,9 +483,7 @@ if __name__ == '__main__':
     seed(1)  # Reproducible results
 
     loaded_specs = []
-    for sfn in [
-        "2022-08-20 good roc model with cut connections.yaml",
-    ]:
+    for sfn in ["2023-01-12 Paper output.yaml"]:
         loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
             Path(Path(__file__).parent, "job_specifications", sfn)))])
 
