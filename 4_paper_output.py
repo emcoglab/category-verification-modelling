@@ -512,6 +512,7 @@ if __name__ == '__main__':
 
     for arg_set in arg_sets:
         main(spec=cca_spec, no_propagation=False, **asdict(arg_set))
+        main(spec=cca_spec, no_propagation=True, **asdict(arg_set))
         main(spec=no_cca_spec, no_propagation=False, **asdict(arg_set))
         main(spec=no_cca_spec, no_propagation=True, **asdict(arg_set))
 
