@@ -482,7 +482,7 @@ def plot_roc(model_hit_rates, model_fa_rates,
 class ArgSet:
     validation_run: bool
     participant_datasets: Optional[ParticipantDataset]
-    
+
     exclude_repeated_items: bool = True
     restrict_to_answerable_items: bool = True
     use_assumed_object_label: bool = False
@@ -507,11 +507,12 @@ if __name__ == '__main__':
     loaded_specs = CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
                                                                   "job_specifications",
                                                                   "2023-01-12 Paper output.yaml"))
-    prop_spec: CategoryVerificationJobSpec = loaded_specs[0]
-    no_prop_spec: CategoryVerificationJobSpec = loaded_specs[1]
+    cca_spec: CategoryVerificationJobSpec = loaded_specs[0]
+    no_cca_spec: CategoryVerificationJobSpec = loaded_specs[1]
 
     for arg_set in arg_sets:
-        main(spec=prop_spec,    no_propagation=False, **asdict(arg_set))
-        main(spec=no_prop_spec, no_propagation=True,  **asdict(arg_set))
+        main(spec=cca_spec, no_propagation=False, **asdict(arg_set))
+        main(spec=no_cca_spec, no_propagation=False, **asdict(arg_set))
+        main(spec=no_cca_spec, no_propagation=True, **asdict(arg_set))
 
     logger.info("Done!")
