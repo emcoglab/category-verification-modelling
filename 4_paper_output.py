@@ -77,7 +77,7 @@ class ParticipantPlotData:
 
 def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool,
-         participant_datasets: Optional[ParticipantDataset],
+         participant_datasets: Optional[ParticipantDataset], items_matching_participant_dataset: ParticipantDataset,
          no_propagation: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
@@ -86,6 +86,9 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
     """
 
     logger.info("")
+
+    if participant_datasets is not None:
+        assert participant_datasets == items_matching_participant_dataset
 
     # Determine directory paths with optional tests for early exit
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
@@ -161,7 +164,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                 filters.append(new_filter)
 
     # Add model peak activations
-    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, participant_datasets=participant_datasets, use_assumed_object_label=use_assumed_object_label)
+    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset, use_assumed_object_label=use_assumed_object_label)
 
     def get_peak_activation(row, *, allow_missing_objects: bool) -> float:
         item_col = ColNames.ImageLabelAssumed if use_assumed_object_label else ColNames.ImageObject
@@ -201,6 +204,16 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
             return max(ac for ac in [peak_activation_linguistic, peak_activation_sensorimotor] if not isnan(ac))
 
     filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
+
+    if items_matching_participant_dataset in {ParticipantDataset.original, ParticipantDataset.original_plus_replication, ParticipantDataset.replication}:
+        filename_prefix += " original items"
+    elif items_matching_participant_dataset == ParticipantDataset.validation:
+        filename_prefix += " validation items"
+    elif items_matching_participant_dataset == ParticipantDataset.balanced:
+        filename_prefix += " balanced items"
+    else:
+        raise NotImplementedError()
+
     if validation_run:
         if participant_datasets == ParticipantDataset.validation_plus_balanced:
             filename_prefix += " all participants"
@@ -224,18 +237,18 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
 
         # apply filters
         if validation_run:
-            if participant_datasets == ParticipantDataset.validation:
+            if items_matching_participant_dataset == ParticipantDataset.validation:
                 filtered_df = CategoryVerificationItemDataBlockedValidation().data_filtered(cv_filter)
-            elif participant_datasets == ParticipantDataset.balanced:
+            elif items_matching_participant_dataset == ParticipantDataset.balanced:
                 filtered_df = CategoryVerificationItemDataValidationBalanced().data_filtered(cv_filter)
             else:
                 raise NotImplementedError()
         else:
-            if participant_datasets == ParticipantDataset.original:
+            if items_matching_participant_dataset == ParticipantDataset.original:
                 filtered_df = CategoryVerificationItemDataOriginal().data_filtered(cv_filter)
-            elif participant_datasets == ParticipantDataset.replication:
+            elif items_matching_participant_dataset == ParticipantDataset.replication:
                 filtered_df = CategoryVerificationItemDataReplication().data_filtered(cv_filter)
-            elif participant_datasets == ParticipantDataset.original_plus_replication:
+            elif items_matching_participant_dataset == ParticipantDataset.original_plus_replication:
                 filtered_df = CategoryVerificationItemDataOriginal().data_filtered(cv_filter)
                 logger.warning("Participant-related values not yet correct when using all participants, these will be omitted.")
                 filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
@@ -329,8 +342,9 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
             filtered_df.to_csv(f, index=False)
 
-    agreement_path: Path = Path(save_dir, f"{filename_prefix} agreement.csv")
-    participant_agreement(validation_run, participant_datasets, agreement_path)
+    if participant_datasets is not None:
+        agreement_path: Path = Path(save_dir, f"{filename_prefix} agreement.csv")
+        participant_agreement(validation_run, participant_datasets, agreement_path)
 
 
 def participant_agreement(validation_run: bool, participant_datasets: ParticipantDataset, agreement_path: Path):
@@ -482,6 +496,7 @@ def plot_roc(model_hit_rates, model_fa_rates,
 class ArgSet:
     validation_run: bool
     participant_datasets: Optional[ParticipantDataset]
+    items_matching_participant_dataset: ParticipantDataset
 
     exclude_repeated_items: bool = True
     restrict_to_answerable_items: bool = True
@@ -497,11 +512,14 @@ if __name__ == '__main__':
     logger.info("Running %s" % " ".join(sys.argv))
 
     arg_sets: List[ArgSet] = [
-        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.original),
-        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.replication),
-        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.original_plus_replication),
-        ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.validation),
-        ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.balanced),
+        ArgSet(validation_run=False, participant_datasets=None, items_matching_participant_dataset=ParticipantDataset.original_plus_replication),
+        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.original, items_matching_participant_dataset=ParticipantDataset.original),
+        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.replication, items_matching_participant_dataset=ParticipantDataset.replication),
+        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.original_plus_replication, items_matching_participant_dataset=ParticipantDataset.original_plus_replication),
+        ArgSet(validation_run=True,  participant_datasets=None, items_matching_participant_dataset=ParticipantDataset.validation),
+        ArgSet(validation_run=True,  participant_datasets=None, items_matching_participant_dataset=ParticipantDataset.balanced),
+        ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.validation, items_matching_participant_dataset=ParticipantDataset.validation),
+        ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.balanced, items_matching_participant_dataset=ParticipantDataset.balanced),
     ]
 
     loaded_specs = CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,

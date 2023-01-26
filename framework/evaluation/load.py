@@ -14,16 +14,16 @@ from framework.evaluation.datasets import ParticipantDataset
 _logger = getLogger(__file__)
 
 
-def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, validation: bool, participant_datasets: ParticipantDataset, with_filter: Optional[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
+def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, validation: bool, for_participant_dataset: ParticipantDataset, with_filter: Optional[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
     """
     Returns a CategoryObjectPair-keyed dictionary of activation traces.
     """
     _logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
 
     if validation:
-        if participant_datasets == ParticipantDataset.validation:
+        if for_participant_dataset == ParticipantDataset.validation:
             category_item_pairs = CategoryVerificationItemDataBlockedValidation().category_object_pairs(with_filter)
-        elif participant_datasets == ParticipantDataset.balanced:
+        elif for_participant_dataset == ParticipantDataset.balanced:
             category_item_pairs = CategoryVerificationItemDataValidationBalanced().category_object_pairs(with_filter)
         else:
             raise NotImplementedError()

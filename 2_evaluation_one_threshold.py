@@ -156,7 +156,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 filters.append(new_filter)
 
     # Add model peak activations
-    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, participant_datasets=participant_datasets, use_assumed_object_label=use_assumed_object_label)
+    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, for_participant_dataset=participant_datasets, use_assumed_object_label=use_assumed_object_label)
 
     def get_peak_activation(row, *, allow_missing_objects: bool) -> float:
         item_col = ColNames.ImageLabelAssumed if use_assumed_object_label else ColNames.ImageObject
