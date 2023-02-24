@@ -159,9 +159,9 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         ]
     }
 
-    # When validating, we can break down by category domains
+    # When validating, we can also break down by category domains
     if validation_run:
-        new_filter_sets: Dict[str, List[Filter]] = dict()
+        new_filter_sets: Dict[str, List[Filter]] = filter_sets.copy()
         for name, filter_set in filter_sets.items():
             for category_domain in ["natural", "artefact"]:
                 if category_domain == "natural" and name == "superordinate":
