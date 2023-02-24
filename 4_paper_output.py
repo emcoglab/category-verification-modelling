@@ -360,9 +360,10 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         participant_agreement(validation_run, participant_datasets, agreement_path)
 
 
-def save_item_exclusions(items_df: DataFrame, filter_set: List[Filter], save_path: Path):
+def save_item_exclusions(items_df: DataFrame, filters: List[Filter], save_path: Path):
     temp_df = items_df.copy()
-    for f in filter_set:
+    filters: List[Filter] = [f for f in filters if f is not None]
+    for f in filters:
         temp_df = f.add_to_df(temp_df)
     with save_path.open("w") as filtered_items_file:
         temp_df.to_csv(filtered_items_file, index=False)
@@ -508,8 +509,8 @@ def plot_roc(model_hit_rates, model_fa_rates,
     ax.set_aspect('equal')
     pyplot.legend(legend_items)
 
-    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.png"), dpi=1200 ,bbox_inches='tight')
-    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.svg"), dpi=1200 ,bbox_inches='tight')
+    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.png"), dpi=1200, bbox_inches='tight')
+    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.svg"), dpi=1200, bbox_inches='tight')
     pyplot.close(fig)
 
 
