@@ -135,7 +135,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
 
     filter_sets: Dict[str, List[Filter | None]] = {
         "both": [
-            Filter.new_category_taxonomic_level_filter(allowed_levels=["both"]),
+            Filter.new_category_taxonomic_level_filter(allowed_levels=["superordinate", "basic"]),
             trial_type_filter,
             repeated_items_filter
         ],
@@ -257,7 +257,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         else:
             raise NotImplementedError()
 
-    for filter_set_name, filter_set in filter_sets:
+    for filter_set_name, filter_set in filter_sets.items():
 
         filter_set: List[Filter] = list(filter_set)  # we may edit it
 
@@ -268,7 +268,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         else:
             items_df[MODEL_PEAK_ACTIVATION] = items_df.apply(get_peak_activation, allow_missing_objects=True, axis=1)
 
-        save_item_exclusions(items_df, filter_set, Path(save_dir, f"items {filter_set_name}"))
+        save_item_exclusions(items_df, filter_set, Path(save_dir, f"items {filter_set_name}.csv"))
 
         filtered_df = Filter.apply_filters(filter_set, to_df=items_df)
 
