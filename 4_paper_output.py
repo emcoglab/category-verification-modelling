@@ -410,13 +410,17 @@ def __compute_kappa(trials_in_list: DataFrame) -> float:
 
 
 def plot_peak_activation_vs_affirmative_proportion(df: DataFrame, filename_prefix: str, filename_suffix: str, save_dir: Path) -> None:
-    set_theme(style="darkgrid")
+    set_theme(style="ticks", rc={
+        "axes.spines.right": False,
+        "axes.spines.top":   False,
+    })
 
     g = jointplot(data=df, x=ColNames.ResponseAffirmativeProportion, y=MODEL_PEAK_ACTIVATION,
                   kind="reg", truncate=False,
                   marginal_kws={"kde": False})
 
-    g.fig.savefig(str(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png")), dpi=1200, bbox_inches='tight')
+    g.fig.savefig(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png"), dpi=1200, bbox_inches='tight')
+    g.fig.savefig(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.svg"), dpi=1200, bbox_inches='tight')
     pyplot.close(g.fig)
 
 
