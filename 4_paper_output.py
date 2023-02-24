@@ -20,7 +20,6 @@ caiwingfield.net
 from __future__ import annotations
 
 import sys
-from copy import deepcopy
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
@@ -28,7 +27,7 @@ from typing import Dict, List, Tuple, Optional
 from matplotlib import pyplot
 from numpy import trapz, isnan, nan
 from numpy.random import seed
-from pandas import DataFrame, Series
+from pandas import DataFrame, Series, isna
 from seaborn import jointplot, set_theme
 from statsmodels.stats.inter_rater import fleiss_kappa
 
@@ -38,11 +37,14 @@ from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.version import VERSION
-from framework.data.category_verification_data import ColNames, CategoryObjectPair, Filter, \
+from framework.data.category_verification_data import \
     CategoryVerificationParticipantOriginal, CategoryVerificationParticipantReplication, \
     CategoryVerificationItemDataOriginal, CategoryVerificationItemDataBlockedValidation, \
     CategoryVerificationParticipantBlockedValidation, CategoryVerificationItemDataReplication, \
     CategoryVerificationParticipantBalancedValidation, CategoryVerificationItemDataValidationBalanced
+from framework.data.entities import CategoryObjectPair
+from framework.data.col_names import ColNames
+from framework.data.filter import Filter
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.datasets import ParticipantDataset
@@ -76,7 +78,7 @@ class ParticipantPlotData:
 
 
 def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
-         restrict_to_answerable_items: bool, use_assumed_object_label: bool, validation_run: bool,
+         restrict_to_answerable_items: bool, validation_run: bool,
          participant_datasets: Optional[ParticipantDataset], items_matching_participant_dataset: ParticipantDataset,
          no_propagation: bool, overwrite: bool):
     """
@@ -123,52 +125,48 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
     save_dir.mkdir(parents=True, exist_ok=True)
 
     if validation_run:
-        trial_types = None
+        trial_type_filter = None
     else:
-        trial_types = [('test', True), ('filler', False)]
+        trial_type_filter = Filter.new_trial_type_filter({('test', True), ('filler', False)})
+    if exclude_repeated_items:
+        repeated_items_filter = Filter.new_repeated_item_filter(tokeniser=modified_word_tokenize)
+    else:
+        repeated_items_filter = None
 
-    filters: List[Filter] = [
-        Filter(
-            name="both" if not use_assumed_object_label else "both (assumed image label)",
-            category_taxonomic_levels=["superordinate", "basic"],
-            trial_types=trial_types,
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
-            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
-        Filter(
-            name="superordinate" if not use_assumed_object_label else "superordinate (assumed image label)",
-            category_taxonomic_levels=["superordinate"],
-            trial_types=trial_types,
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
-            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
-        Filter(
-            name="basic" if not use_assumed_object_label else "basic (assumed image label)",
-            category_taxonomic_levels=["basic"],
-            trial_types=trial_types,
-            repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None,
-            use_assumed_object_label=use_assumed_object_label and exclude_repeated_items),
-    ]
+    filter_sets: Dict[str, List[Filter | None]] = {
+        "both": [
+            Filter.new_category_taxonomic_level_filter(allowed_levels=["both"]),
+            trial_type_filter,
+            repeated_items_filter
+        ],
+        "superordinate": [
+            Filter.new_category_taxonomic_level_filter(allowed_levels=["superordinate"]),
+            trial_type_filter,
+            repeated_items_filter
+        ],
+        "basic": [
+            Filter.new_category_taxonomic_level_filter(allowed_levels=["basic"]),
+            trial_type_filter,
+            repeated_items_filter
+        ]
+    }
 
     # When validating, we can break down by category domains
     if validation_run:
-        category_domains = ["natural", "artefact"]
-        original_filters = list(filters)
-        for f in original_filters:
-            for category_domain in category_domains:
-                new_filter = deepcopy(f)
-                new_filter.category_domain = [category_domain]
-                new_filter.name = f"{category_domain} {f.name}"
-                if new_filter.category_domain == ["natural"] and new_filter.category_taxonomic_levels == ["superordinate"]:
+        new_filter_sets: Dict[str, List[Filter]] = dict()
+        for name, filter_set in filter_sets.items():
+            for category_domain in ["natural", "artefact"]:
+                if category_domain == "natural" and name == "superordinate":
                     # There are no items here
-                    # TODO: this convolution seems a little silly
                     continue
-                filters.append(new_filter)
+                new_filter_sets[f"{category_domain} {name}"] = filter_set + [Filter.new_category_domain_filter([category_domain])]
+        filter_sets = new_filter_sets
 
     # Add model peak activations
-    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset, use_assumed_object_label=use_assumed_object_label)
+    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset)
 
     def get_peak_activation(row, *, allow_missing_objects: bool) -> float:
-        item_col = ColNames.ImageLabelAssumed if use_assumed_object_label else ColNames.ImageObject
-        cop = CategoryObjectPair(category_label=row[ColNames.CategoryLabel], object_label=row[item_col])
+        cop = CategoryObjectPair(category_label=row[ColNames.CategoryLabel], object_label=row[ColNames.ImageObject])
         try:
             model_activations_df: DataFrame = model_data[cop]
         except KeyError:
@@ -233,39 +231,46 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         elif participant_datasets is not None:
             raise ValueError(participant_datasets)
 
-    for cv_filter in filters:
-
-        # apply filters
-        if validation_run:
-            if items_matching_participant_dataset == ParticipantDataset.validation:
-                filtered_df = CategoryVerificationItemDataBlockedValidation().data_filtered(cv_filter)
-            elif items_matching_participant_dataset == ParticipantDataset.balanced:
-                filtered_df = CategoryVerificationItemDataValidationBalanced().data_filtered(cv_filter)
-            else:
-                raise NotImplementedError()
+    # apply filters
+    if validation_run:
+        if items_matching_participant_dataset == ParticipantDataset.validation:
+            items_df = CategoryVerificationItemDataBlockedValidation().data
+        elif items_matching_participant_dataset == ParticipantDataset.balanced:
+            items_df = CategoryVerificationItemDataValidationBalanced().data
         else:
-            if items_matching_participant_dataset == ParticipantDataset.original:
-                filtered_df = CategoryVerificationItemDataOriginal().data_filtered(cv_filter)
-            elif items_matching_participant_dataset == ParticipantDataset.replication:
-                filtered_df = CategoryVerificationItemDataReplication().data_filtered(cv_filter)
-            elif items_matching_participant_dataset == ParticipantDataset.original_plus_replication:
-                filtered_df = CategoryVerificationItemDataOriginal().data_filtered(cv_filter)
-                logger.warning("Participant-related values not yet correct when using all participants, these will be omitted.")
-                filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
-                                          ColNames.ResponseAccuracySD,
-                                          ColNames.ParticipantCount,
-                                          ColNames.ResponseRTMean,
-                                          ColNames.ResponseRTSD,
-                                          ],
-                                 inplace=True)
-            else:
-                raise NotImplementedError()
+            raise NotImplementedError()
+    else:
+        if items_matching_participant_dataset == ParticipantDataset.original:
+            items_df = CategoryVerificationItemDataOriginal().data
+        elif items_matching_participant_dataset == ParticipantDataset.replication:
+            items_df = CategoryVerificationItemDataReplication().data
+        elif items_matching_participant_dataset == ParticipantDataset.original_plus_replication:
+            items_df = CategoryVerificationItemDataOriginal().data
+            logger.warning("Participant-related values not yet correct when using all participants, these will be omitted.")
+            items_df.drop(columns=[ColNames.ResponseAccuracyMean,
+                                      ColNames.ResponseAccuracySD,
+                                      ColNames.ParticipantCount,
+                                      ColNames.ResponseRTMean,
+                                      ColNames.ResponseRTSD,
+                                      ],
+                          inplace=True)
+        else:
+            raise NotImplementedError()
+
+    for filter_set_name, filter_set in filter_sets:
+
+        filter_set: List[Filter] = list(filter_set)  # we may edit it
 
         if restrict_to_answerable_items:
-            filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1, allow_missing_objects=False)
-            filtered_df.dropna(subset=[MODEL_PEAK_ACTIVATION], inplace=True)
+            items_df[MODEL_PEAK_ACTIVATION] = items_df.apply(get_peak_activation, allow_missing_objects=False, axis=1)
+            filter_set.append(Filter(exclusion_selector=lambda row: isna(row[MODEL_PEAK_ACTIVATION]),
+                                     name="available to model"))
         else:
-            filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1, allow_missing_objects=True)
+            items_df[MODEL_PEAK_ACTIVATION] = items_df.apply(get_peak_activation, allow_missing_objects=True, axis=1)
+
+        save_item_exclusions(items_df, filter_set, Path(save_dir, f"items {filter_set_name}"))
+
+        filtered_df = Filter.apply_filters(filter_set, to_df=items_df)
 
         # Model hitrates
         model_hit_rates = []
@@ -278,7 +283,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                 strict_inequality=True)
             model_hit_rates.append(hit_rate)
             model_false_alarm_rates.append(fa_rate)
-        filename_suffix = cv_filter.name
+        filename_suffix = filter_set_name
 
         # Participant hitrates
         participant_plot_datasets = []
@@ -310,7 +315,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                 participant_dataset = CategoryVerificationParticipantOriginal()
                 participant_summary_df = participant_dataset.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemDataOriginal.list_category_object_pairs_from_dataframe(
-                        filtered_df, use_assumed_object_label=use_assumed_object_label))
+                        filtered_df))
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
@@ -320,7 +325,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                 participant_dataset = CategoryVerificationParticipantReplication()
                 participant_summary_df = participant_dataset.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemDataOriginal.list_category_object_pairs_from_dataframe(
-                        filtered_df, use_assumed_object_label=use_assumed_object_label))
+                        filtered_df))
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
@@ -345,6 +350,14 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
     if participant_datasets is not None:
         agreement_path: Path = Path(save_dir, f"{filename_prefix} agreement.csv")
         participant_agreement(validation_run, participant_datasets, agreement_path)
+
+
+def save_item_exclusions(items_df: DataFrame, filter_set: List[Filter], save_path: Path):
+    temp_df = items_df.copy()
+    for f in filter_set:
+        temp_df = f.add_to_df(temp_df)
+    with save_path.open("w") as filtered_items_file:
+        temp_df.to_csv(filtered_items_file, index=False)
 
 
 def participant_agreement(validation_run: bool, participant_datasets: ParticipantDataset, agreement_path: Path):
@@ -500,7 +513,6 @@ class ArgSet:
 
     exclude_repeated_items: bool = True
     restrict_to_answerable_items: bool = True
-    use_assumed_object_label: bool = False
 
     overwrite: bool = True
 
