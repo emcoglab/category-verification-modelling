@@ -41,7 +41,7 @@ from framework.cognitive_model.sensorimotor_norms.exceptions import WordNotInNor
 from framework.cognitive_model.utils.exceptions import ItemNotFoundError
 from framework.cognitive_model.utils.logging import logger
 from framework.cognitive_model.utils.maths import scale_prevalence_01, prevalence_from_fraction_known
-from framework.data.category_verification_data import CategoryVerificationItemDataOriginal, Filter, \
+from framework.data.category_verification_data import CategoryVerificationItemDataOriginal, \
     CategoryVerificationItemDataBlockedValidation, CategoryVerificationItemDataValidationBalanced
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import CLOCK, CATEGORY_ACTIVATION_LINGUISTIC_f, \
@@ -182,10 +182,6 @@ def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
                 category_object_pairs.append(cop)
     else:
         category_object_pairs = CategoryVerificationItemDataOriginal().category_object_pairs()
-        # Add items using the assumed object label rather than the always-subordinate object label
-        category_object_pairs += CategoryVerificationItemDataOriginal().category_object_pairs(
-            use_assumed_object_label=True,
-            with_filter=Filter("differently assumed", assumed_object_label_differs=True))
 
     object_activation_increment: ActivationValue = job_spec.object_activation / job_spec.incremental_activation_duration
 
