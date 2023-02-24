@@ -14,11 +14,11 @@ from framework.evaluation.datasets import ParticipantDataset
 _logger = getLogger(__file__)
 
 
-def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label: bool, validation: bool, for_participant_dataset: ParticipantDataset, with_filter: Optional[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
+def load_model_output_from_dir(activation_traces_dir: Path, use_assumed_object_label: bool, validation: bool, for_participant_dataset: ParticipantDataset, with_filter: Optional[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
     """
     Returns a CategoryObjectPair-keyed dictionary of activation traces.
     """
-    _logger.info(f"\tLoading model activation logs from {model_output_dir.as_posix()}")
+    _logger.info(f"\tLoading model activation logs from {activation_traces_dir.as_posix()}")
 
     if validation:
         if for_participant_dataset == ParticipantDataset.validation:
@@ -37,8 +37,7 @@ def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label:
     all_model_data: Dict[CategoryObjectPair, DataFrame] = dict()
     for category_item_pair in category_item_pairs:
         category_label, object_label = category_item_pair
-        model_output_path = Path(model_output_dir, "activation traces",
-                                 f"{category_label}-{object_label} activation.csv")
+        model_output_path = Path(activation_traces_dir, f"{category_label}-{object_label} activation.csv")
         if not model_output_path.exists():
             # logger.warning(f"{model_output_path.name} not found.")
             continue
@@ -48,6 +47,6 @@ def load_model_output_from_dir(model_output_dir: Path, use_assumed_object_label:
                                                                                     dtype={CLOCK: int})
 
     if len(all_model_data) == 0:
-        raise FileNotFoundError(f"No model data in {model_output_dir.as_posix()}")
+        raise FileNotFoundError(f"No model data in {activation_traces_dir.as_posix()}")
 
     return all_model_data

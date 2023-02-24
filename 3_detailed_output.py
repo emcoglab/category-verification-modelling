@@ -192,6 +192,8 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
         _logger.info(f"Incomplete model run found in {model_output_dir.as_posix()}")
         return
 
+    activation_traces_dir = Path(model_output_dir, "activation traces")
+
     # Output dir
     save_dir = Path(model_output_dir, " output")  # TODO: this is a bad directory name; unexpected, ambiguous
     if save_dir.exists() and not overwrite:
@@ -201,7 +203,7 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
 
     # Load output data data from this run
     try:
-        all_model_data = load_model_output_from_dir(model_output_dir)
+        all_model_data = load_model_output_from_dir(activation_traces_dir)
     except FileNotFoundError:
         _logger.warning(f"No model data in {model_output_dir.as_posix()}")
         return

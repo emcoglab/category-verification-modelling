@@ -19,6 +19,7 @@ caiwingfield.net
 
 from __future__ import annotations
 
+import shutil
 import sys
 from copy import deepcopy
 from dataclasses import dataclass, asdict
@@ -117,10 +118,17 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
     if not complete_file.exists():
         logger.warning(f"Skipping incomplete model run: {complete_file.parent.as_posix()}")
         return
+
+    activation_traces_dir = Path(model_output_dir, "activation traces")
+
     if save_dir.exists() and not overwrite:
         logger.info(f"Evaluation complete for {save_dir.as_posix()}")
         return
     save_dir.mkdir(parents=True, exist_ok=True)
+
+    # Just for archiving purposes
+    model_output_copy_dir = Path(save_dir, "activation traces")
+    shutil.copytree(activation_traces_dir, model_output_copy_dir, dirs_exist_ok=True)  # Overwrite!
 
     if validation_run:
         trial_types = None
@@ -164,7 +172,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                 filters.append(new_filter)
 
     # Add model peak activations
-    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset, use_assumed_object_label=use_assumed_object_label)
+    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(activation_traces_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset, use_assumed_object_label=use_assumed_object_label)
 
     def get_peak_activation(row, *, allow_missing_objects: bool) -> float:
         item_col = ColNames.ImageLabelAssumed if use_assumed_object_label else ColNames.ImageObject
