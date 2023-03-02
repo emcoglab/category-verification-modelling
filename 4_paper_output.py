@@ -173,110 +173,34 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
     # Add model peak activations
     model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(activation_traces_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset)
 
-    def get_peak_activation(row, *, allow_missing_objects: bool) -> float:
-        cop = CategoryObjectPair(category_label=row[ColNames.CategoryLabel], object_label=row[ColNames.ImageObject])
-        try:
-            model_activations_df: DataFrame = model_data[cop]
-        except KeyError:
-            return nan
-        # The decision rests on the peak activation over object labels over both components, so we can just take the max
-        # of all of them
-        object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
-        object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
-        # We are only interested in the activation after ths SOA
-        post_soa_df = model_activations_df.loc[spec.soa_ticks+1:spec.run_for_ticks]
+    activation_plots_dir = Path(save_dir, "activation plots")
+    activation_plots_dir.mkdir(parents=False, exist_ok=True)
+    plot_activation_traces(model_data, spec=spec, save_to_dir=activation_plots_dir)
 
-        peak_activation_sensorimotor = post_soa_df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].max()
-
-        linguistic_activations = [
-            post_soa_df[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].max()
-            for part in object_label_linguistic_multiword_parts
-        ]
-
-        if not allow_missing_objects:
-            if isnan(peak_activation_sensorimotor) or any(isnan(a) for a in linguistic_activations):
-                return nan
-
-        if all(isnan(a) for a in linguistic_activations):
-            # Can't take a max
-            peak_activation_linguistic = nan
-        else:
-            peak_activation_linguistic = max(a for a in linguistic_activations if not isnan(a))
-
-        if isnan(peak_activation_linguistic) and isnan(peak_activation_sensorimotor):
-            # Can't take a max
-            return nan
-        else:
-            return max(ac for ac in [peak_activation_linguistic, peak_activation_sensorimotor] if not isnan(ac))
+    items_name_fragment = get_item_name_fragment(items_matching_participant_dataset)
+    participants_name_fragment = get_participant_name_fragment(participant_datasets, validation_run)
 
     filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
+    filename_prefix += f" {items_name_fragment}"
+    if participants_name_fragment:
+        filename_prefix += f" {participants_name_fragment}"
 
-    if items_matching_participant_dataset in {ParticipantDataset.original, ParticipantDataset.original_plus_replication, ParticipantDataset.replication}:
-        filename_prefix += " original items"
-    elif items_matching_participant_dataset == ParticipantDataset.validation:
-        filename_prefix += " validation items"
-    elif items_matching_participant_dataset == ParticipantDataset.balanced:
-        filename_prefix += " balanced items"
-    else:
-        raise NotImplementedError()
-
-    if validation_run:
-        if participant_datasets == ParticipantDataset.validation_plus_balanced:
-            filename_prefix += " all participants"
-        elif participant_datasets == ParticipantDataset.validation:
-            filename_prefix += " validation participants"
-        elif participant_datasets == ParticipantDataset.balanced:
-            filename_prefix += " balanced participants"
-        elif participant_datasets is not None:
-            raise ValueError(participant_datasets)
-    else:
-        if participant_datasets == ParticipantDataset.original_plus_replication:
-            filename_prefix += " all participants"
-        elif participant_datasets == ParticipantDataset.original:
-            filename_prefix += " original participants"
-        elif participant_datasets == ParticipantDataset.replication:
-            filename_prefix += " replication participants"
-        elif participant_datasets is not None:
-            raise ValueError(participant_datasets)
-
-    # apply filters
-    if validation_run:
-        if items_matching_participant_dataset == ParticipantDataset.validation:
-            items_df = CategoryVerificationItemDataBlockedValidation().data
-        elif items_matching_participant_dataset == ParticipantDataset.balanced:
-            items_df = CategoryVerificationItemDataValidationBalanced().data
-        else:
-            raise NotImplementedError()
-    else:
-        if items_matching_participant_dataset == ParticipantDataset.original:
-            items_df = CategoryVerificationItemDataOriginal().data
-        elif items_matching_participant_dataset == ParticipantDataset.replication:
-            items_df = CategoryVerificationItemDataReplication().data
-        elif items_matching_participant_dataset == ParticipantDataset.original_plus_replication:
-            items_df = CategoryVerificationItemDataOriginal().data
-            logger.warning("Participant-related values not yet correct when using all participants, these will be omitted.")
-            items_df.drop(columns=[ColNames.ResponseAccuracyMean,
-                                      ColNames.ResponseAccuracySD,
-                                      ColNames.ParticipantCount,
-                                      ColNames.ResponseRTMean,
-                                      ColNames.ResponseRTSD,
-                                      ],
-                          inplace=True)
-        else:
-            raise NotImplementedError()
+    items_df = get_items_df(items_matching_participant_dataset, validation_run)
 
     for filter_set_name, filter_set in filter_sets.items():
 
         filter_set: List[Filter] = list(filter_set)  # we may edit it
 
         if restrict_to_answerable_items:
-            items_df[MODEL_PEAK_ACTIVATION] = items_df.apply(get_peak_activation, allow_missing_objects=False, axis=1)
+            items_df[MODEL_PEAK_ACTIVATION] = items_df.apply(get_peak_activation, axis=1,
+                                                             allow_missing_objects=False, model_data=model_data, spec=spec)
             filter_set.append(Filter(exclusion_selector=lambda row: isna(row[MODEL_PEAK_ACTIVATION]),
                                      name="available to model"))
         else:
-            items_df[MODEL_PEAK_ACTIVATION] = items_df.apply(get_peak_activation, allow_missing_objects=True, axis=1)
+            items_df[MODEL_PEAK_ACTIVATION] = items_df.apply(get_peak_activation, axis=1,
+                                                             allow_missing_objects=True, model_data=model_data, spec=spec)
 
-        save_item_exclusions(items_df, filter_set, Path(save_dir, f"items {filter_set_name}.csv"))
+        save_item_exclusions(items_df, filter_set, Path(save_dir, f"{items_name_fragment} item exclusion for {filter_set_name}.csv"))
 
         filtered_df = Filter.apply_filters(filter_set, to_df=items_df)
 
@@ -358,6 +282,136 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
     if participant_datasets is not None:
         agreement_path: Path = Path(save_dir, f"{filename_prefix} agreement.csv")
         participant_agreement(validation_run, participant_datasets, agreement_path)
+
+
+def plot_activation_traces(model_data: Dict[CategoryObjectPair, DataFrame], spec: CategoryVerificationJobSpec, save_to_dir: Path) -> None:
+    for cop, activation_data in model_data.items():
+        object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
+        object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
+
+        set_theme(style="whitegrid")
+
+        fig, ax = pyplot.subplots()
+
+        activation_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].plot.line(color="orange")
+        for part in object_label_linguistic_multiword_parts:
+            activation_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].plot.line(color="blue")
+
+        ax.set_xlim([0, spec.run_for_ticks])
+        ax.set_ylim([0, 1])
+
+        ax.set_xlabel("Time")
+        ax.set_ylabel("Activation")
+
+        pyplot.savefig(Path(save_to_dir, f"{cop.category_label} -> {cop.object_label}.svg"), dpi=1200, bbox_inches="tight")
+        pyplot.close(fig)
+
+
+def get_peak_activation(row, *, allow_missing_objects: bool, spec: CategoryVerificationJobSpec, model_data: Dict[CategoryObjectPair, DataFrame]) -> float:
+    cop = CategoryObjectPair(category_label=row[ColNames.CategoryLabel], object_label=row[ColNames.ImageObject])
+    try:
+        model_activations_df: DataFrame = model_data[cop]
+    except KeyError:
+        return nan
+    # The decision rests on the peak activation over object labels over both components, so we can just take the max
+    # of all of them
+    object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
+    object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
+    # We are only interested in the activation after ths SOA
+    post_soa_df = model_activations_df.loc[spec.soa_ticks+1:spec.run_for_ticks]
+
+    peak_activation_sensorimotor = post_soa_df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].max()
+
+    linguistic_activations = [
+        post_soa_df[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].max()
+        for part in object_label_linguistic_multiword_parts
+    ]
+
+    if not allow_missing_objects:
+        if isnan(peak_activation_sensorimotor) or any(isnan(a) for a in linguistic_activations):
+            return nan
+
+    if all(isnan(a) for a in linguistic_activations):
+        # Can't take a max
+        peak_activation_linguistic = nan
+    else:
+        peak_activation_linguistic = max(a for a in linguistic_activations if not isnan(a))
+
+    if isnan(peak_activation_linguistic) and isnan(peak_activation_sensorimotor):
+        # Can't take a max
+        return nan
+    else:
+        return max(ac for ac in [peak_activation_linguistic, peak_activation_sensorimotor] if not isnan(ac))
+
+
+
+def get_items_df(items_matching_participant_dataset, validation_run):
+    # apply filters
+    if validation_run:
+        if items_matching_participant_dataset == ParticipantDataset.validation:
+            items_df = CategoryVerificationItemDataBlockedValidation().data
+        elif items_matching_participant_dataset == ParticipantDataset.balanced:
+            items_df = CategoryVerificationItemDataValidationBalanced().data
+        else:
+            raise NotImplementedError()
+    else:
+        if items_matching_participant_dataset == ParticipantDataset.original:
+            items_df = CategoryVerificationItemDataOriginal().data
+        elif items_matching_participant_dataset == ParticipantDataset.replication:
+            items_df = CategoryVerificationItemDataReplication().data
+        elif items_matching_participant_dataset == ParticipantDataset.original_plus_replication:
+            items_df = CategoryVerificationItemDataOriginal().data
+            logger.warning(
+                "Participant-related values not yet correct when using all participants, these will be omitted.")
+            items_df.drop(columns=[ColNames.ResponseAccuracyMean,
+                                   ColNames.ResponseAccuracySD,
+                                   ColNames.ParticipantCount,
+                                   ColNames.ResponseRTMean,
+                                   ColNames.ResponseRTSD,
+                                   ],
+                          inplace=True)
+        else:
+            raise NotImplementedError()
+    return items_df
+
+
+def get_item_name_fragment(items_matching_participant_dataset):
+    if items_matching_participant_dataset in {ParticipantDataset.original, ParticipantDataset.original_plus_replication,
+                                              ParticipantDataset.replication}:
+        items_name_fragment = "original items"
+    elif items_matching_participant_dataset == ParticipantDataset.validation:
+        items_name_fragment = "validation items"
+    elif items_matching_participant_dataset == ParticipantDataset.balanced:
+        items_name_fragment = "balanced items"
+    else:
+        raise NotImplementedError()
+    return items_name_fragment
+
+
+def get_participant_name_fragment(participant_datasets, validation_run):
+    if validation_run:
+        if participant_datasets == ParticipantDataset.validation_plus_balanced:
+            participants_name_fragment = "all participants"
+        elif participant_datasets == ParticipantDataset.validation:
+            participants_name_fragment = "validation participants"
+        elif participant_datasets == ParticipantDataset.balanced:
+            participants_name_fragment = "balanced participants"
+        elif participant_datasets is None:
+            participants_name_fragment = ""
+        else:
+            raise ValueError(participant_datasets)
+    else:
+        if participant_datasets == ParticipantDataset.original_plus_replication:
+            participants_name_fragment = "all participants"
+        elif participant_datasets == ParticipantDataset.original:
+            participants_name_fragment = "original participants"
+        elif participant_datasets == ParticipantDataset.replication:
+            participants_name_fragment = "replication participants"
+        elif participant_datasets is None:
+            participants_name_fragment = ""
+        else:
+            raise ValueError(participant_datasets)
+    return participants_name_fragment
 
 
 def save_item_exclusions(items_df: DataFrame, filters: List[Filter], save_path: Path):
