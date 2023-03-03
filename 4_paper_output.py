@@ -289,7 +289,10 @@ def plot_activation_traces(model_data: Dict[CategoryObjectPair, DataFrame], spec
         object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
         object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
 
-        set_theme(style="whitegrid")
+        set_theme(style="ticks", rc={
+            "axes.spines.right": False,
+            "axes.spines.top": False,
+        })
 
         fig, ax = pyplot.subplots()
 
