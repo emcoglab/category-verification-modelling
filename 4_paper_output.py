@@ -171,7 +171,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         filter_sets = new_filter_sets
 
     # Add model peak activations
-    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(model_output_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset)
+    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(activation_traces_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset)
 
     activation_plots_dir = Path(save_dir, "activation plots")
     activation_plots_dir.mkdir(parents=False, exist_ok=True)
