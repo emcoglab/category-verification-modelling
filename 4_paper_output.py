@@ -525,11 +525,13 @@ def plot_roc(model_hit_rates, model_fa_rates,
     auc = trapz(list(reversed(model_hit_rates)), list(reversed(model_fa_rates)))
 
     # Identity line
-    pyplot.plot([0, 1], [0, 1], "r--")
+    identity_plot = pyplot.plot([0, 1], [0, 1], "r--",
+                                label="Random classifier")
     # Model
-    pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour)
+    model_plot = pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour,
+                             label="Model")
 
-    legend_items = ["Random classifier", "Model"]
+    legend_items = [identity_plot, model_plot]
     if participant_plot_datasets:
         participant_aucs = []
         individual_area_colour: RGBA = named_colour(
@@ -539,7 +541,8 @@ def plot_roc(model_hit_rates, model_fa_rates,
         for participant_plot_data in participant_plot_datasets:
             # Participant points
             pyplot.plot(participant_plot_data.fa_rates, participant_plot_data.hit_rates,
-                        participant_plot_data.symbol, color=participant_plot_data.colour)
+                        participant_plot_data.symbol, color=participant_plot_data.colour,
+                        label=f"Participants ({participant_plot_data.dataset_name} dataset)")
             # Participant mean spline interpolation
             # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
             # Participant linearly interpolated areas
@@ -548,8 +551,6 @@ def plot_roc(model_hit_rates, model_fa_rates,
                 py = [0, participant_hit, 1]
                 pyplot.fill_between(px, py, color=individual_area_colour, label='_nolegend_')
                 participant_aucs.append(trapz(py, px))
-
-            legend_items.append(f"Participants ({participant_plot_data.dataset_name} dataset)")
 
         ppt_title_clause = f"; " \
                            f"ppt range:" \
@@ -568,7 +569,7 @@ def plot_roc(model_hit_rates, model_fa_rates,
                  f"{ppt_title_clause})"
                  )
     ax.set_aspect('equal')
-    pyplot.legend(legend_items)
+    pyplot.legend()
 
     pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.png"), dpi=1200, bbox_inches='tight')
     pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.svg"), dpi=1200, bbox_inches='tight')
