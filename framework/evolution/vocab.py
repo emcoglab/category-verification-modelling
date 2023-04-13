@@ -87,8 +87,7 @@ class Vocab:
         return df
 
 
-_data_dir = Path("/Users/caiwingfield/Box Sync/LANGBOOT Project/Experiments",
-                 "Phase 3 - Cognitive Evolution/Exp. 3.0 - Vocabulary Evolution/")
+_data_dir = Path("/mmfs1/storage/users/wingfiel/experimental_data/vocab-evolution/")
 _vocab_paths: Dict[str, Path] = {
     "AoA": Path(_data_dir, "AoA vocab list N=34138.csv"),
     "Evolutionary": Path(_data_dir, "Evolutionary vocab list N=34138.csv"),

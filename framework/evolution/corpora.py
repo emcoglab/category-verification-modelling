@@ -4,9 +4,8 @@ from typing import Dict
 from framework.cognitive_model.ldm.corpus.corpus import CorpusMetadata
 from framework.evolution.vocab import Vocab, VOCABS
 
-_corpus_dir: Path = Path("/Volumes/Big Data/vocab-evolution/corpora/")
-_freq_dist_dir: Path = Path("/Volumes/Big Data/vocab-evolution/indexes/")
-
+_corpus_dir: Path = Path("/mmfs1/storage/users/wingfiel/corpora/vocab-evolution/")
+_freq_dist_dir: Path = Path("/mmfs1/storage/users/wingfiel/indexes/vocab-evolution/")
 
 # vocab -> corpus_meta
 FILTERED_CORPORA: Dict[Vocab, CorpusMetadata] = {

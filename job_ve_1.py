@@ -75,10 +75,10 @@ if __name__ == '__main__':
                     if validation_run: extra_arguments.append("--validation_run")
                     if validation_run and category_letter == "c":
                         for object_letter in ALPHABET.lower():
-                            job.run_locally(extra_arguments=extra_arguments + [f"--object_starts_with {object_letter}"])
+                            job.submit(extra_arguments=extra_arguments + [f"--object_starts_with {object_letter}"])
                             job_count += 1
                     else:
-                        job.run_locally(extra_arguments=extra_arguments)
+                        job.submit(extra_arguments=extra_arguments)
                         job_count += 1
 
     print(f"Submitted {job_count} jobs.")

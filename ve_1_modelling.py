@@ -24,7 +24,7 @@ from typing import Optional
 from numpy import nan
 from pandas import DataFrame
 
-_config_file_location = Path(Path(__file__).parent, "framework/evolution/config_override.yaml")
+_config_file_location = Path(Path(__file__).parent, "wayland_ve_config_override.yaml")
 from framework.cognitive_model.preferences.config import Config as ModelConfig
 ModelConfig(use_config_overrides_from_file=_config_file_location.as_posix())
 from framework.cognitive_model.ldm.preferences.config import Config as LDMConfig
