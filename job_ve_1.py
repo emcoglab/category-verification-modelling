@@ -1,11 +1,11 @@
 from copy import deepcopy
 from pathlib import Path
 
-from framework.cli.job import CategoryVerificationJob, CategoryVerificationJobSpec
+from framework.cli.job import VocabEvolutionCategoryVerificationJob, VocabEvolutionCategoryVerificationJobSpec
 from framework.evolution.corpora import FILTERED_CORPORA
 
 
-class Job_VE_1(CategoryVerificationJob):
+class Job_VE_1(VocabEvolutionCategoryVerificationJob):
 
     # max_sphere_radius (i.e. pruning distance) -> RAM/G
     def SM_RAM(self, distance: float) -> int:
@@ -39,7 +39,7 @@ class Job_VE_1(CategoryVerificationJob):
             elif words <= 60_000: return 11
         raise NotImplementedError()
 
-    def __init__(self, spec: CategoryVerificationJobSpec):
+    def __init__(self, spec: VocabEvolutionCategoryVerificationJobSpec):
         super().__init__(
             script_number="1",
             script_name="1_modelling.py",
@@ -47,7 +47,7 @@ class Job_VE_1(CategoryVerificationJob):
 
     @property
     def _ram_requirement_g(self):
-        assert isinstance(self.spec, CategoryVerificationJobSpec)
+        assert isinstance(self.spec, VocabEvolutionCategoryVerificationJobSpec)
         return (self.SM_RAM(self.spec.sensorimotor_spec.max_radius)
                 + self.LING_RAM(model=self.spec.linguistic_spec.model_name, words=self.spec.linguistic_spec.n_words))
 
@@ -57,8 +57,8 @@ if __name__ == '__main__':
     ALPHABET = "abcdefghijklmnopqrstuvwxyz"
 
     jobs = []
-    s: CategoryVerificationJobSpec
-    for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
+    s: VocabEvolutionCategoryVerificationJobSpec
+    for s in VocabEvolutionCategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
                                                             "job_specifications/2023-01-12 Paper output.yaml")):
         for _, corpus in FILTERED_CORPORA.items():
             spec = deepcopy(s)
