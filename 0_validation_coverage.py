@@ -26,7 +26,19 @@ from framework.cognitive_model.ldm.corpus.indexing import FreqDist
 from framework.cognitive_model.ldm.utils.logging import print_progress
 from framework.cognitive_model.sensorimotor_norms.sensorimotor_norms import SensorimotorNorms
 from framework.cognitive_model.utils.logging import logger
-from framework.data.category_verification_data import CategoryVerificationItemDataBlockedValidation
+from framework.data.category_verification_data import CategoryVerificationItemDataBlockedValidation, \
+    CategoryVerificationItemData
+from framework.data.col_names import ColNames
+
+
+def is_member(dataset: CategoryVerificationItemData, category_label: str, object_label: str) -> bool:
+    """
+    Returns True if the category/object pair is present in the dataset and is tagged as being a true member, and
+    False if the category/object pair is present and marked as being a false member.
+
+    Raises a KeyError if the category/object pair is not present in the dataset.
+    """
+    return dataset._get_col_value(category_label, object_label, col_name=ColNames.ShouldBeVerified)
 
 
 def main(linguistic_words: int):
@@ -48,7 +60,7 @@ def main(linguistic_words: int):
         validation_coverage_data.append({
             "Category": category_label,
             "Object": object_label,
-            "Is member": cv_item_data.is_member(category_label, object_label),
+            "Is member": is_member(cv_item_data, category_label, object_label),
             "Object freq": fd[object_label],
             "Object rank": object_rank,
             "Object in LC": object_in_lc,

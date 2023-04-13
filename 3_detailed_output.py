@@ -21,7 +21,7 @@ from __future__ import annotations
 import sys
 from logging import getLogger, basicConfig, INFO
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 from matplotlib import pyplot
 from numpy.random import seed
@@ -31,7 +31,10 @@ from framework.cli.job import CategoryVerificationJobSpec
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
 from framework.cognitive_model.version import VERSION
 from framework.data.category_verification_data import CategoryVerificationParticipantOriginal, \
-    CategoryVerificationItemData, CategoryObjectPair, ColNames, Filter
+    CategoryVerificationItemDataOriginal
+from framework.data.entities import CategoryObjectPair
+from framework.data.col_names import ColNames
+from framework.data.filter import Filter
 from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.decision import make_model_decision_two_threshold, Outcome, make_all_model_decisions_two_thresholds, DecisionColNames
@@ -81,7 +84,7 @@ def plot_object_activation_traces(spec: CategoryVerificationJobSpec,
 
         model_outcome: Outcome = Outcome.from_decision(
             decision=model_decision,
-            should_be_yes=CategoryVerificationItemData().is_correct(category_label, object_label))
+            should_be_yes=CategoryVerificationItemDataOriginal().is_correct(category_label, object_label))
 
         # Determine correct axis
         if model_outcome == Outcome.Hit:
@@ -127,7 +130,7 @@ def plot_object_activation_traces(spec: CategoryVerificationJobSpec,
 
 def categorise_errors(spec: CategoryVerificationJobSpec,
                       all_model_data: Dict[CategoryObjectPair, DataFrame],
-                      with_filter: Filter,
+                      with_filters: List[Filter],
                       decision_threshold_yes: float, decision_threshold_no: float):
     """
     Categories the model's correct and incorrect guesses by the type of the stimulus
@@ -136,11 +139,11 @@ def categorise_errors(spec: CategoryVerificationJobSpec,
     model_guesses_df = make_all_model_decisions_two_thresholds(all_model_data=all_model_data,
                                                                decision_threshold_yes=decision_threshold_yes, decision_threshold_no=decision_threshold_no,
                                                                spec=spec,
-                                                               with_filter=with_filter)
+                                                               with_filters=with_filters)
 
     # Add taxonomic level for all items
     model_guesses_df = model_guesses_df.merge(
-        CategoryVerificationItemData().dataframe_filtered(with_filter)[[
+        Filter.apply_filters(with_filters, to_df=CategoryVerificationItemDataOriginal().data)[[
             ColNames.CategoryLabel, ColNames.ImageObject,
             # New columns to include
             ColNames.CategoryTaxonomicLevel, ColNames.EasyHardToReject,
@@ -180,9 +183,7 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
 
     assert decision_threshold_no < decision_threshold_yes
 
-    cv_filter = Filter(
-        repeated_items_tokeniser=modified_word_tokenize if exclude_repeated_items else None
-    )
+    cv_filter = Filter.new_repeated_item_filter(tokeniser=modified_word_tokenize) if exclude_repeated_items else None
 
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
     if not model_output_dir.exists():
@@ -191,6 +192,8 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
     if not Path(model_output_dir, " MODEL RUN COMPLETE").exists():
         _logger.info(f"Incomplete model run found in {model_output_dir.as_posix()}")
         return
+
+    activation_traces_dir = Path(model_output_dir, "activation traces")
 
     # Output dir
     save_dir = Path(model_output_dir, " output")  # TODO: this is a bad directory name; unexpected, ambiguous
@@ -201,7 +204,7 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
 
     # Load output data data from this run
     try:
-        all_model_data = load_model_output_from_dir(model_output_dir)
+        all_model_data = load_model_output_from_dir(activation_traces_dir)
     except FileNotFoundError:
         _logger.warning(f"No model data in {model_output_dir.as_posix()}")
         return
@@ -212,13 +215,11 @@ def main(spec: CategoryVerificationJobSpec, decision_threshold_yes: float, decis
                                   decision_threshold_no=decision_threshold_no,
                                   save_dir=save_dir)
 
-
     categorise_errors(spec=spec,
                       all_model_data=all_model_data,
-                      with_filter=cv_filter,
+                      with_filters=[cv_filter],
                       decision_threshold_yes=decision_threshold_yes,
                       decision_threshold_no=decision_threshold_no)
-
 
 
 if __name__ == '__main__':

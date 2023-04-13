@@ -24,15 +24,15 @@ from typing import Optional
 from numpy import nan
 from pandas import DataFrame
 
-from os import path
+_config_file_location = Path(Path(__file__).parent, "framework/evolution/config_override.yaml")
 from framework.cognitive_model.preferences.config import Config as ModelConfig
-ModelConfig(use_config_overrides_from_file=path.join(path.dirname(__file__), "wayland_config_override.yaml"))
+ModelConfig(use_config_overrides_from_file=_config_file_location.as_posix())
 from framework.cognitive_model.ldm.preferences.config import Config as LDMConfig
-LDMConfig(use_config_overrides_from_file=path.join(path.dirname(__file__), "wayland_config_override.yaml"))
+LDMConfig(use_config_overrides_from_file=_config_file_location.as_posix())
 from framework.cognitive_model.sensorimotor_norms.config.config import Config as SMConfig
-SMConfig(use_config_overrides_from_file=path.join(path.dirname(__file__), "wayland_config_override.yaml"))
+SMConfig(use_config_overrides_from_file=_config_file_location.as_posix())
 
-from framework.cli.job import CategoryVerificationJobSpec, LinguisticPropagationJobSpec, SensorimotorPropagationJobSpec
+from framework.cli.job import VocabEvolutionCategoryVerificationJobSpec, LinguisticPropagationJobSpec, SensorimotorPropagationJobSpec
 from framework.cognitive_model.attenuation_statistic import AttenuationStatistic
 from framework.cognitive_model.basic_types import ActivationValue, Length, Component
 from framework.cognitive_model.combined_cognitive_model import InteractiveCombinedCognitiveModel
@@ -129,7 +129,7 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
     }
 
 
-def main(job_spec: CategoryVerificationJobSpec, validation_run: bool,
+def main(job_spec: VocabEvolutionCategoryVerificationJobSpec, validation_run: bool,
          filter_category_starts_with: Optional[str], filter_object_starts_with: Optional[str],
          no_propagation: bool = False):
 
@@ -402,7 +402,7 @@ if __name__ == '__main__':
         logger.warning("BrEng translation will always be used in the interactive model.")
 
     main(
-        job_spec=CategoryVerificationJobSpec(
+        job_spec=VocabEvolutionCategoryVerificationJobSpec(
             linguistic_spec=LinguisticPropagationJobSpec(
                 accessible_set_threshold=args.linguistic_accessible_set_threshold,
                 accessible_set_capacity=args.linguistic_accessible_set_capacity,

@@ -1,0 +1,8 @@
+# Config override for vocab evolution project
+models:
+  directory: "/Volumes/Big Data/vocab-evolution/vectors/"
+graphs_dir: "/Users/caiwingfield/Data/vocab-evolution/graphs/"
+
+sensorimotor-norms-location: "/Users/caiwingfield/Box Sync/LANGBOOT Project/Model/FINAL_sensorimotor_norms_for_39707_words.csv"
+
+output_dir: "/Volumes/Big Data/spreading activation model/Model output/"

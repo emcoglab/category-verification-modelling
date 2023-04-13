@@ -19,16 +19,17 @@ caiwingfield.net
 
 from __future__ import annotations
 
+import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
 from matplotlib import pyplot
 from numpy import trapz, isnan, nan
 from numpy.random import seed
-from pandas import DataFrame, Series
-from seaborn import jointplot
+from pandas import DataFrame, Series, isna
+from seaborn import jointplot, set_theme
 from statsmodels.stats.inter_rater import fleiss_kappa
 
 from framework.cli.job import CategoryVerificationJobSpec
@@ -54,6 +55,7 @@ from framework.evaluation.load import load_model_output_from_dir
 
 # Paths
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
+OUTPUT_DIR = Path("/Users/caiwingfield/Resilio Sync/Lancaster/ Current/CV output")
 
 # Shared
 _n_threshold_steps = 10
@@ -73,11 +75,12 @@ class ParticipantPlotData:
     fa_rates: Series
     dataset_name: str
     colour: str
+    symbol: str
 
 
-def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated_items: bool,
+def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, validation_run: bool,
-         participant_datasets: Optional[ParticipantDataset],
+         participant_datasets: Optional[ParticipantDataset], items_matching_participant_dataset: ParticipantDataset,
          no_propagation: bool, overwrite: bool):
     """
     :param: exclude_repeated_items:
@@ -86,14 +89,21 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     """
 
     logger.info("")
-    logger.info(f"Spec: {spec_filename}")
+
+    if participant_datasets is not None:
+        assert participant_datasets == items_matching_participant_dataset
 
     # Determine directory paths with optional tests for early exit
     model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
+    save_dir = Path(OUTPUT_DIR, spec.output_location_relative())
     if no_propagation:
         model_output_dir = Path(model_output_dir.parent, model_output_dir.name + "_no_propagation")
+        save_dir = Path(save_dir.parent, save_dir.name + "_no_propagation")
     if validation_run:
         model_output_dir = Path(model_output_dir, "validation")
+        save_dir = Path(save_dir, "validation")
+    else:
+        save_dir = Path(save_dir, "original")
     if not model_output_dir.exists():
         logger.warning(f"Model output not found for v{VERSION} in directory {model_output_dir.as_posix()}")
         return
@@ -110,11 +120,17 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
     if not complete_file.exists():
         logger.warning(f"Skipping incomplete model run: {complete_file.parent.as_posix()}")
         return
-    save_dir = Path(model_output_dir, " evaluation")
+
+    activation_traces_dir = Path(model_output_dir, "activation traces")
+
     if save_dir.exists() and not overwrite:
         logger.info(f"Evaluation complete for {save_dir.as_posix()}")
         return
-    save_dir.mkdir(parents=False, exist_ok=True)
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    # Just for archiving purposes
+    model_output_copy_dir = Path(save_dir, "activation traces")
+    shutil.copytree(activation_traces_dir, model_output_copy_dir, dirs_exist_ok=True)  # Overwrite!
 
     if validation_run:
         trial_type_filter = None
@@ -127,7 +143,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
 
     filter_sets: Dict[str, List[Filter | None]] = {
         "both": [
-            Filter.new_category_taxonomic_level_filter(allowed_levels=["both"]),
+            Filter.new_category_taxonomic_level_filter(allowed_levels=["superordinate", "basic"]),
             trial_type_filter,
             repeated_items_filter
         ],
@@ -143,116 +159,50 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         ]
     }
 
-    # When validating, we can break down by category domains
+    # When validating, we can also break down by category domains
     if validation_run:
-        new_filter_sets: Dict[str, List[Filter]] = dict()
+        new_filter_sets: Dict[str, List[Filter]] = filter_sets.copy()
         for name, filter_set in filter_sets.items():
             for category_domain in ["natural", "artefact"]:
                 if category_domain == "natural" and name == "superordinate":
                     # There are no items here
-                    # TODO: this convolution seems a little silly
                     continue
                 new_filter_sets[f"{category_domain} {name}"] = filter_set + [Filter.new_category_domain_filter([category_domain])]
         filter_sets = new_filter_sets
 
     # Add model peak activations
-    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(activation_traces_dir, validation=validation_run, for_participant_dataset=participant_datasets)
+    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(activation_traces_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset)
 
-    def get_peak_activation(row, *, allow_missing_objects: bool) -> float:
-        cop = CategoryObjectPair(category_label=row[ColNames.CategoryLabel], object_label=row[ColNames.ImageObject])
-        try:
-            model_activations_df: DataFrame = model_data[cop]
-        except KeyError:
-            return nan
-        # The decision rests on the peak activation over object labels over both components, so we can just take the max
-        # of all of them
-        object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
-        object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
-        # We are only interested in the activation after ths SOA
-        post_soa_df = model_activations_df.loc[spec.soa_ticks+1:spec.run_for_ticks]
+    activation_plots_dir = Path(save_dir, "activation plots")
+    activation_plots_dir.mkdir(parents=False, exist_ok=True)
+    plot_activation_traces(model_data, spec=spec, save_to_dir=activation_plots_dir)
 
-        peak_activation_sensorimotor = post_soa_df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].max()
-
-        linguistic_activations = [
-            post_soa_df[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].max()
-            for part in object_label_linguistic_multiword_parts
-        ]
-
-        if not allow_missing_objects:
-            if isnan(peak_activation_sensorimotor) or any(isnan(a) for a in linguistic_activations):
-                return nan
-
-        if all(isnan(a) for a in linguistic_activations):
-            # Can't take a max
-            peak_activation_linguistic = nan
-        else:
-            peak_activation_linguistic = max(a for a in linguistic_activations if not isnan(a))
-
-        if isnan(peak_activation_linguistic) and isnan(peak_activation_sensorimotor):
-            # Can't take a max
-            return nan
-        else:
-            return max(ac for ac in [peak_activation_linguistic, peak_activation_sensorimotor] if not isnan(ac))
+    items_name_fragment = get_item_name_fragment(items_matching_participant_dataset)
+    participants_name_fragment = get_participant_name_fragment(participant_datasets, validation_run)
 
     filename_prefix = 'excluding repeated items' if exclude_repeated_items else 'overall'
-    if validation_run:
-        if participant_datasets == ParticipantDataset.validation_plus_balanced:
-            filename_prefix += " all participants"
-        elif participant_datasets == ParticipantDataset.validation:
-            filename_prefix += " validation participants"
-        elif participant_datasets == ParticipantDataset.balanced:
-            filename_prefix += " balanced participants"
-        elif participant_datasets is not None:
-            raise ValueError(participant_datasets)
-    else:
-        if participant_datasets == ParticipantDataset.original_plus_replication:
-            filename_prefix += " all participants"
-        elif participant_datasets == ParticipantDataset.original:
-            filename_prefix += " original participants"
-        elif participant_datasets == ParticipantDataset.replication:
-            filename_prefix += " replication participants"
-        elif participant_datasets is not None:
-            raise ValueError(participant_datasets)
+    filename_prefix += f" {items_name_fragment}"
+    if participants_name_fragment:
+        filename_prefix += f" {participants_name_fragment}"
 
-    for filter_set_name, filter_set in filter_sets:
+    items_df = get_items_df(items_matching_participant_dataset, validation_run)
 
-        # apply filters
-        if validation_run:
-            if participant_datasets == ParticipantDataset.validation:
-                filtered_df = Filter.apply_filters(filters=filter_set,
-                                                   to_df=CategoryVerificationItemDataBlockedValidation().data)
-            elif participant_datasets == ParticipantDataset.balanced:
-                filtered_df = Filter.apply_filters(filters=filter_set,
-                                                   to_df=CategoryVerificationItemDataValidationBalanced().data)
-            else:
-                raise NotImplementedError()
-        else:
-            if participant_datasets == ParticipantDataset.original:
-                filtered_df = Filter.apply_filters(filters=filter_set,
-                                                   to_df=CategoryVerificationItemDataOriginal().data)
-            elif participant_datasets == ParticipantDataset.replication:
-                filtered_df = Filter.apply_filters(filters=filter_set,
-                                                   to_df=CategoryVerificationItemDataReplication().data)
-            elif participant_datasets == ParticipantDataset.original_plus_replication:
-                filtered_df = Filter.apply_filters(filters=filter_set,
-                                                   to_df=CategoryVerificationItemDataOriginal().data)
-                logger.warning(
-                    "Participant-related values not yet correct when using all participants, these will be omitted.")
-                filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
-                                          ColNames.ResponseAccuracySD,
-                                          ColNames.ParticipantCount,
-                                          ColNames.ResponseRTMean,
-                                          ColNames.ResponseRTSD,
-                                          ],
-                                 inplace=True)
-            else:
-                raise NotImplementedError()
+    for filter_set_name, filter_set in filter_sets.items():
+
+        filter_set: List[Filter] = list(filter_set)  # we may edit it
 
         if restrict_to_answerable_items:
-            filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1, allow_missing_objects=False)
-            filtered_df.dropna(subset=[MODEL_PEAK_ACTIVATION], inplace=True)
+            items_df[MODEL_PEAK_ACTIVATION] = items_df.apply(get_peak_activation, axis=1,
+                                                             allow_missing_objects=False, model_data=model_data, spec=spec)
+            filter_set.append(Filter(exclusion_selector=lambda row: isna(row[MODEL_PEAK_ACTIVATION]),
+                                     name="available to model"))
         else:
-            filtered_df[MODEL_PEAK_ACTIVATION] = filtered_df.apply(get_peak_activation, axis=1, allow_missing_objects=True)
+            items_df[MODEL_PEAK_ACTIVATION] = items_df.apply(get_peak_activation, axis=1,
+                                                             allow_missing_objects=True, model_data=model_data, spec=spec)
+
+        save_item_exclusions(items_df, filter_set, Path(save_dir, f"{items_name_fragment} item exclusion for {filter_set_name}.csv"))
+
+        filtered_df = Filter.apply_filters(filter_set, to_df=items_df)
 
         # Model hitrates
         model_hit_rates = []
@@ -279,7 +229,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="validation", colour="forestgreen")
+                                        dataset_name="validation", colour="forestgreen", symbol="+")
                 )
             if participant_datasets in {ParticipantDataset.balanced, ParticipantDataset.validation_plus_balanced}:
                 participant_dataset = CategoryVerificationParticipantBalancedValidation()
@@ -289,7 +239,7 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="balanced", colour="lightseagreen")
+                                        dataset_name="balanced", colour="lightseagreen", symbol="x")
                 )
 
         else:
@@ -301,16 +251,17 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="original", colour="blueviolet")
+                                        dataset_name="original", colour="blueviolet", symbol="+")
                 )
             if participant_datasets in {ParticipantDataset.replication, ParticipantDataset.original_plus_replication}:
                 participant_dataset = CategoryVerificationParticipantReplication()
                 participant_summary_df = participant_dataset.participant_summary_dataframe(
-                    use_item_subset=CategoryVerificationItemDataOriginal.list_category_object_pairs_from_dataframe(filtered_df))
+                    use_item_subset=CategoryVerificationItemDataOriginal.list_category_object_pairs_from_dataframe(
+                        filtered_df))
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="replication", colour="mediumvioletred")
+                                        dataset_name="replication", colour="mediumvioletred", symbol="x")
                 )
 
         plot_roc(model_hit_rates, model_false_alarm_rates,
@@ -328,17 +279,159 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
         with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
             filtered_df.to_csv(f, index=False)
 
-    agreement_path: Path = Path(save_dir, f"{filename_prefix} agreement.csv")
-    participant_agreement(validation_run, participant_datasets, agreement_path)
+    if participant_datasets is not None:
+        agreement_path: Path = Path(save_dir, f"{filename_prefix} agreement.csv")
+        participant_agreement(validation_run, participant_datasets, agreement_path)
+
+
+def plot_activation_traces(model_data: Dict[CategoryObjectPair, DataFrame], spec: CategoryVerificationJobSpec, save_to_dir: Path) -> None:
+    for cop, activation_data in model_data.items():
+        object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
+        object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
+
+        set_theme(style="ticks", rc={
+            "axes.spines.right": False,
+            "axes.spines.top": False,
+        })
+
+        fig, ax = pyplot.subplots()
+
+        activation_data[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].plot.line(color="orange")
+        for part in object_label_linguistic_multiword_parts:
+            activation_data[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].plot.line(color="blue")
+
+        ax.set_xlim([0, spec.run_for_ticks])
+        ax.set_ylim([0, 1])
+
+        ax.set_xlabel("Time")
+        ax.set_ylabel("Activation")
+
+        pyplot.savefig(Path(save_to_dir, f"{cop.category_label} -> {cop.object_label}.svg"), dpi=1200, bbox_inches="tight")
+        pyplot.close(fig)
+
+
+def get_peak_activation(row, *, allow_missing_objects: bool, spec: CategoryVerificationJobSpec, model_data: Dict[CategoryObjectPair, DataFrame]) -> float:
+    cop = CategoryObjectPair(category_label=row[ColNames.CategoryLabel], object_label=row[ColNames.ImageObject])
+    try:
+        model_activations_df: DataFrame = model_data[cop]
+    except KeyError:
+        return nan
+    # The decision rests on the peak activation over object labels over both components, so we can just take the max
+    # of all of them
+    object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
+    object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
+    # We are only interested in the activation after ths SOA
+    post_soa_df = model_activations_df.loc[spec.soa_ticks+1:spec.run_for_ticks]
+
+    peak_activation_sensorimotor = post_soa_df[OBJECT_ACTIVATION_SENSORIMOTOR_f.format(object_label_sensorimotor)].max()
+
+    linguistic_activations = [
+        post_soa_df[OBJECT_ACTIVATION_LINGUISTIC_f.format(part)].max()
+        for part in object_label_linguistic_multiword_parts
+    ]
+
+    if not allow_missing_objects:
+        if isnan(peak_activation_sensorimotor) or any(isnan(a) for a in linguistic_activations):
+            return nan
+
+    if all(isnan(a) for a in linguistic_activations):
+        # Can't take a max
+        peak_activation_linguistic = nan
+    else:
+        peak_activation_linguistic = max(a for a in linguistic_activations if not isnan(a))
+
+    if isnan(peak_activation_linguistic) and isnan(peak_activation_sensorimotor):
+        # Can't take a max
+        return nan
+    else:
+        return max(ac for ac in [peak_activation_linguistic, peak_activation_sensorimotor] if not isnan(ac))
+
+
+
+def get_items_df(items_matching_participant_dataset, validation_run):
+    # apply filters
+    if validation_run:
+        if items_matching_participant_dataset == ParticipantDataset.validation:
+            items_df = CategoryVerificationItemDataBlockedValidation().data
+        elif items_matching_participant_dataset == ParticipantDataset.balanced:
+            items_df = CategoryVerificationItemDataValidationBalanced().data
+        else:
+            raise NotImplementedError()
+    else:
+        if items_matching_participant_dataset == ParticipantDataset.original:
+            items_df = CategoryVerificationItemDataOriginal().data
+        elif items_matching_participant_dataset == ParticipantDataset.replication:
+            items_df = CategoryVerificationItemDataReplication().data
+        elif items_matching_participant_dataset == ParticipantDataset.original_plus_replication:
+            items_df = CategoryVerificationItemDataOriginal().data
+            logger.warning(
+                "Participant-related values not yet correct when using all participants, these will be omitted.")
+            items_df.drop(columns=[ColNames.ResponseAccuracyMean,
+                                   ColNames.ResponseAccuracySD,
+                                   ColNames.ParticipantCount,
+                                   ColNames.ResponseRTMean,
+                                   ColNames.ResponseRTSD,
+                                   ],
+                          inplace=True)
+        else:
+            raise NotImplementedError()
+    return items_df
+
+
+def get_item_name_fragment(items_matching_participant_dataset):
+    if items_matching_participant_dataset in {ParticipantDataset.original, ParticipantDataset.original_plus_replication,
+                                              ParticipantDataset.replication}:
+        items_name_fragment = "original items"
+    elif items_matching_participant_dataset == ParticipantDataset.validation:
+        items_name_fragment = "validation items"
+    elif items_matching_participant_dataset == ParticipantDataset.balanced:
+        items_name_fragment = "balanced items"
+    else:
+        raise NotImplementedError()
+    return items_name_fragment
+
+
+def get_participant_name_fragment(participant_datasets, validation_run):
+    if validation_run:
+        if participant_datasets == ParticipantDataset.validation_plus_balanced:
+            participants_name_fragment = "all participants"
+        elif participant_datasets == ParticipantDataset.validation:
+            participants_name_fragment = "validation participants"
+        elif participant_datasets == ParticipantDataset.balanced:
+            participants_name_fragment = "balanced participants"
+        elif participant_datasets is None:
+            participants_name_fragment = ""
+        else:
+            raise ValueError(participant_datasets)
+    else:
+        if participant_datasets == ParticipantDataset.original_plus_replication:
+            participants_name_fragment = "all participants"
+        elif participant_datasets == ParticipantDataset.original:
+            participants_name_fragment = "original participants"
+        elif participant_datasets == ParticipantDataset.replication:
+            participants_name_fragment = "replication participants"
+        elif participant_datasets is None:
+            participants_name_fragment = ""
+        else:
+            raise ValueError(participant_datasets)
+    return participants_name_fragment
+
+
+def save_item_exclusions(items_df: DataFrame, filters: List[Filter], save_path: Path):
+    temp_df = items_df.copy()
+    filters: List[Filter] = [f for f in filters if f is not None]
+    for f in filters:
+        temp_df = f.add_to_df(temp_df)
+    with save_path.open("w") as filtered_items_file:
+        temp_df.to_csv(filtered_items_file, index=False)
 
 
 def participant_agreement(validation_run: bool, participant_datasets: ParticipantDataset, agreement_path: Path):
 
     # Haven't done these yet!
-    if not validation_run:
-        raise NotImplementedError()
-    if participant_datasets != ParticipantDataset.balanced:
-        raise NotImplementedError()
+    if not validation_run or  participant_datasets != ParticipantDataset.balanced:
+        logger.warning("Skipping participant-agreement calculation for this dataset, not yet implemented!")
+        return
 
     item_data = CategoryVerificationItemDataValidationBalanced()
     participant_data = CategoryVerificationParticipantBalancedValidation().data
@@ -357,6 +450,7 @@ def participant_agreement(validation_run: bool, participant_datasets: Participan
         DataFrame(agreements).to_csv(f, index=False)
 
 
+# todo: extract duplicate
 def __compute_kappa(trials_in_list: DataFrame) -> float:
     trials_in_list = trials_in_list.copy()
     trials_in_list["yes"] = trials_in_list[ColNames.Response]
@@ -373,14 +467,17 @@ def __compute_kappa(trials_in_list: DataFrame) -> float:
 
 
 def plot_peak_activation_vs_affirmative_proportion(df: DataFrame, filename_prefix: str, filename_suffix: str, save_dir: Path) -> None:
-    from seaborn import set_theme
-    set_theme(style="darkgrid")  # Todo: globally
+    set_theme(style="ticks", rc={
+        "axes.spines.right": False,
+        "axes.spines.top":   False,
+    })
 
     g = jointplot(data=df, x=ColNames.ResponseAffirmativeProportion, y=MODEL_PEAK_ACTIVATION,
                   kind="reg", truncate=False,
                   marginal_kws={"kde": False})
 
-    g.fig.savefig(str(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png")))
+    g.fig.savefig(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png"), dpi=1200, bbox_inches='tight')
+    g.fig.savefig(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.svg"), dpi=1200, bbox_inches='tight')
     pyplot.close(g.fig)
 
 
@@ -420,17 +517,21 @@ def plot_roc(model_hit_rates, model_fa_rates,
              filename_prefix, filename_suffix, save_dir,
              model_colour: str, participant_area_colour: str):
 
+    set_theme(style="whitegrid")
+
     fig, ax = pyplot.subplots()
 
     # AUC
     auc = trapz(list(reversed(model_hit_rates)), list(reversed(model_fa_rates)))
 
     # Identity line
-    pyplot.plot([0, 1], [0, 1], "r--")
+    identity_plot = pyplot.plot([0, 1], [0, 1], "r--",
+                                label="Random classifier")
     # Model
-    pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour)
+    model_plot = pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour,
+                             label="Model")
 
-    legend_items = ["Random classifier", "Model"]
+    legend_items = [identity_plot, model_plot]
     if participant_plot_datasets:
         participant_aucs = []
         individual_area_colour: RGBA = named_colour(
@@ -440,7 +541,8 @@ def plot_roc(model_hit_rates, model_fa_rates,
         for participant_plot_data in participant_plot_datasets:
             # Participant points
             pyplot.plot(participant_plot_data.fa_rates, participant_plot_data.hit_rates,
-                        "+", color=participant_plot_data.colour)
+                        participant_plot_data.symbol, color=participant_plot_data.colour,
+                        label=f"Participants ({participant_plot_data.dataset_name} dataset)")
             # Participant mean spline interpolation
             # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
             # Participant linearly interpolated areas
@@ -449,8 +551,6 @@ def plot_roc(model_hit_rates, model_fa_rates,
                 py = [0, participant_hit, 1]
                 pyplot.fill_between(px, py, color=individual_area_colour, label='_nolegend_')
                 participant_aucs.append(trapz(py, px))
-
-            legend_items.append(f"Participants ({participant_plot_data.dataset_name} dataset)")
 
         ppt_title_clause = f"; " \
                            f"ppt range:" \
@@ -468,39 +568,53 @@ def plot_roc(model_hit_rates, model_fa_rates,
                  f" {auc:.2}"
                  f"{ppt_title_clause})"
                  )
-    pyplot.legend(legend_items)
+    ax.set_aspect('equal')
+    pyplot.legend()
 
-    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.png", dpi=1200))
-    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.svg", dpi=1200))
+    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.png"), dpi=1200, bbox_inches='tight')
+    pyplot.savefig(Path(save_dir, f"{filename_prefix} ROC {filename_suffix}.svg"), dpi=1200, bbox_inches='tight')
     pyplot.close(fig)
+
+
+@dataclass
+class ArgSet:
+    validation_run: bool
+    participant_datasets: Optional[ParticipantDataset]
+    items_matching_participant_dataset: ParticipantDataset
+
+    exclude_repeated_items: bool = True
+    restrict_to_answerable_items: bool = True
+
+    overwrite: bool = True
 
 
 # noinspection DuplicatedCode
 if __name__ == '__main__':
-    logger.info("Running %s" % " ".join(sys.argv))
-
     seed(1)  # Reproducible results
 
-    loaded_specs = []
-    for sfn in [
-        "2022-08-20 good roc model with cut connections.yaml",
-    ]:
-        loaded_specs.extend([(s, sfn, i) for i, s in enumerate(CategoryVerificationJobSpec.load_multiple(
-            Path(Path(__file__).parent, "job_specifications", sfn)))])
+    logger.info("Running %s" % " ".join(sys.argv))
 
-    spec: CategoryVerificationJobSpec
-    for j, (spec, sfn, i) in enumerate(loaded_specs, start=1):
-        logger.info(f"Evaluating model {j} of {len(loaded_specs)}")
-        for no_propagation in [False, True]:
-            main(
-                spec=spec,
-                spec_filename=f"{sfn} [{i}]",
-                exclude_repeated_items=True,
-                restrict_to_answerable_items=True,
-                validation_run=True,
-                participant_datasets=ParticipantDataset.balanced,
-                overwrite=True,
-                no_propagation=no_propagation,
-            )
+    arg_sets: List[ArgSet] = [
+        ArgSet(validation_run=False, participant_datasets=None, items_matching_participant_dataset=ParticipantDataset.original_plus_replication),
+        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.original, items_matching_participant_dataset=ParticipantDataset.original),
+        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.replication, items_matching_participant_dataset=ParticipantDataset.replication),
+        ArgSet(validation_run=False, participant_datasets=ParticipantDataset.original_plus_replication, items_matching_participant_dataset=ParticipantDataset.original_plus_replication),
+        ArgSet(validation_run=True,  participant_datasets=None, items_matching_participant_dataset=ParticipantDataset.validation),
+        ArgSet(validation_run=True,  participant_datasets=None, items_matching_participant_dataset=ParticipantDataset.balanced),
+        ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.validation, items_matching_participant_dataset=ParticipantDataset.validation),
+        ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.balanced, items_matching_participant_dataset=ParticipantDataset.balanced),
+    ]
+
+    loaded_specs = CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
+                                                                  "job_specifications",
+                                                                  "2023-01-12 Paper output.yaml"))
+    cca_spec: CategoryVerificationJobSpec = loaded_specs[0]
+    no_cca_spec: CategoryVerificationJobSpec = loaded_specs[1]
+
+    for arg_set in arg_sets:
+        main(spec=cca_spec, no_propagation=False, **asdict(arg_set))
+        main(spec=cca_spec, no_propagation=True, **asdict(arg_set))
+        main(spec=no_cca_spec, no_propagation=False, **asdict(arg_set))
+        main(spec=no_cca_spec, no_propagation=True, **asdict(arg_set))
 
     logger.info("Done!")
