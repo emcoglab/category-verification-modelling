@@ -910,7 +910,7 @@ class CategoryVerificationJob(InteractiveCombinedJob, ABC):
         return "cv" + super().name
 
 
-class VocabEvolutionRemoteAssociatesJob(CategoryVerificationJob, ABC):
+class VocabEvolutionCategoryVerificationJob(CategoryVerificationJob, ABC):
     def __init__(self, *args, **kwargs):
         self.spec: VocabEvolutionCategoryVerificationJobSpec
         super().__init__(*args, **kwargs)

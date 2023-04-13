@@ -9,53 +9,51 @@ LDMConfig(use_config_overrides_from_file=_config_file_location.as_posix())
 from framework.cognitive_model.sensorimotor_norms.config.config import Config as SMConfig
 SMConfig(use_config_overrides_from_file=_config_file_location.as_posix())
 
-from framework.cli.job import CategoryVerificationJob, CategoryVerificationJobSpec
+from framework.cli.job import VocabEvolutionCategoryVerificationJob, VocabEvolutionCategoryVerificationJobSpec
 from framework.evolution.corpora import FILTERED_CORPORA
 
 
-class Job_VE_1(CategoryVerificationJob):
+class Job_VE_1(VocabEvolutionCategoryVerificationJob):
 
     # max_sphere_radius (i.e. pruning distance) -> RAM/G
-    def SM_RAM(self, distance: float) -> int:
+    @classmethod
+    def SM_RAM(cls, distance: float) -> int:
         if distance <= 1:
-            return 5
+            return 6
         elif distance <= 1.5:
-            return 20
+            return 31
         # 198 is the largest min edge length, so the threshold below which the graph becomes disconnected
         elif distance <= 1.98:
-            return 45
+            return 56
         elif distance <= 2:
-            return 50
+            return 62
         else:
             # Max
-            return 100
+            return 120
 
-    def LING_RAM(self, model: str, words: int) -> int:
+    @classmethod
+    def LING_RAM(cls, model: str, words: int) -> int:
         if model == "pmi_ngram":
-            if words <=    1_000: return 2
-            elif words <=  3_000: return 3
-            elif words <= 10_000: return 7
-            elif words <= 30_000: return 11
-            elif words <= 40_000: return 15
-            elif words <= 60_000: return 20
+            # It's probably not actually double, but it's a decent upper-bound
+            return 2 * cls.LING_RAM("ppmi_ngram", words=words)
         elif model == "ppmi_ngram":
-            if words <=    1_000: return 2
-            elif words <=  3_000: return 3
-            elif words <= 10_000: return 5
-            elif words <= 30_000: return 7
-            elif words <= 40_000: return 9
-            elif words <= 60_000: return 11
+            if words <=    1_000: return 3
+            elif words <=  3_000: return 4
+            elif words <= 10_000: return 6
+            elif words <= 30_000: return 8
+            elif words <= 40_000: return 10
+            elif words <= 60_000: return 12
         raise NotImplementedError()
 
-    def __init__(self, spec: CategoryVerificationJobSpec):
+    def __init__(self, spec: VocabEvolutionCategoryVerificationJobSpec):
         super().__init__(
-            script_number="1",
-            script_name="1_modelling.py",
+            script_number="ve1",
+            script_name="vw_1_modelling.py",
             spec=spec)
 
     @property
     def _ram_requirement_g(self):
-        assert isinstance(self.spec, CategoryVerificationJobSpec)
+        assert isinstance(self.spec, VocabEvolutionCategoryVerificationJobSpec)
         return (self.SM_RAM(self.spec.sensorimotor_spec.max_radius)
                 + self.LING_RAM(model=self.spec.linguistic_spec.model_name, words=self.spec.linguistic_spec.n_words))
 
@@ -65,8 +63,8 @@ if __name__ == '__main__':
     ALPHABET = "abcdefghijklmnopqrstuvwxyz"
 
     jobs = []
-    s: CategoryVerificationJobSpec
-    for s in CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
+    s: VocabEvolutionCategoryVerificationJobSpec
+    for s in VocabEvolutionCategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
                                                             "job_specifications/2023-01-12 Paper output.yaml")):
         for _, corpus in FILTERED_CORPORA.items():
             spec = deepcopy(s)

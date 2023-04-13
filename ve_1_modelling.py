@@ -143,7 +143,10 @@ def main(job_spec: VocabEvolutionCategoryVerificationJobSpec, validation_run: bo
         filter_object_starts_with = filter_object_starts_with.lower()
 
     # Set up output directories
-    response_dir: Path = Path(Preferences.output_dir, "Category verification", job_spec.output_location_relative())
+    response_dir: Path = Path(Preferences.output_dir,
+                              "Category verification vocab evolution",
+                              f"{job_spec.linguistic_spec.corpus_name}",
+                              job_spec.output_location_relative())
     if no_propagation:
         response_dir = Path(response_dir.parent, response_dir.name + "_no_propagation")
     if validation_run:
@@ -167,8 +170,8 @@ def main(job_spec: VocabEvolutionCategoryVerificationJobSpec, validation_run: bo
 
     # Set up model
     model = InteractiveCombinedCognitiveModel(
-        sensorimotor_component=job_spec.sensorimotor_spec.to_component(SensorimotorComponent),
         linguistic_component=job_spec.linguistic_spec.to_component(LinguisticComponent),
+        sensorimotor_component=job_spec.sensorimotor_spec.to_component(SensorimotorComponent),
         lc_to_smc_delay=job_spec.lc_to_smc_delay,
         smc_to_lc_delay=job_spec.smc_to_lc_delay,
         lc_to_smc_threshold=job_spec.lc_to_smc_threshold,
