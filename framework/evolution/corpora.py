@@ -7,7 +7,6 @@ from framework.evolution.vocab import Vocab, VOCABS
 _corpus_dir: Path = Path("/Volumes/Big Data/vocab-evolution/corpora/")
 _freq_dist_dir: Path = Path("/Volumes/Big Data/vocab-evolution/indexes/")
 
-
 # vocab -> corpus_meta
 FILTERED_CORPORA: Dict[Vocab, CorpusMetadata] = {
     vocab: CorpusMetadata(
