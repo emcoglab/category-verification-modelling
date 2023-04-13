@@ -1,6 +1,14 @@
 from copy import deepcopy
 from pathlib import Path
 
+_config_file_location = Path(Path(__file__).parent, "wayland_ve_config_override.yaml")
+from framework.cognitive_model.preferences.config import Config as ModelConfig
+ModelConfig(use_config_overrides_from_file=_config_file_location.as_posix())
+from framework.cognitive_model.ldm.preferences.config import Config as LDMConfig
+LDMConfig(use_config_overrides_from_file=_config_file_location.as_posix())
+from framework.cognitive_model.sensorimotor_norms.config.config import Config as SMConfig
+SMConfig(use_config_overrides_from_file=_config_file_location.as_posix())
+
 from framework.cli.job import CategoryVerificationJob, CategoryVerificationJobSpec
 from framework.evolution.corpora import FILTERED_CORPORA
 
