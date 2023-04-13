@@ -783,6 +783,12 @@ class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
             incremental_activation_duration=int(dictionary["Incremental activation duration"]),
         )
 
+
+@dataclass
+class VocabEvolutionCategoryVerificationJobSpec(CategoryVerificationJobSpec):
+    pass
+
+
 # endregion
 
 
@@ -797,7 +803,7 @@ class Job(ABC):
                  spec: JobSpec,
                  ):
         self._number: str = script_number
-        self.short_name: str = "j" + script_number.replace("_", "")
+        self.short_name: str = "j" + self._number.replace("_", "")
         self.script_name: str = script_name  # "../" + script_name
         self.module_name: str = Job._without_py(script_name)
         self.spec = spec
@@ -902,5 +908,19 @@ class CategoryVerificationJob(InteractiveCombinedJob, ABC):
     @property
     def name(self) -> str:
         return "cv" + super().name
+
+
+class VocabEvolutionRemoteAssociatesJob(CategoryVerificationJob, ABC):
+    def __init__(self, *args, **kwargs):
+        self.spec: VocabEvolutionCategoryVerificationJobSpec
+        super().__init__(*args, **kwargs)
+
+        # The actual number of words here will sometimes be less than the
+        # requested number of words. Because the number of words is used in the
+        # file name we have to replace it with the actual number of words
+        corpus = get_corpus_from_name(self.spec.linguistic_spec.corpus_name)
+        freq_dist = FreqDist.load(corpus.freq_dist_path)
+        if len(freq_dist) < self.spec.linguistic_spec.n_words:
+            self.spec.linguistic_spec.n_words = len(freq_dist)
 
 # endregion
