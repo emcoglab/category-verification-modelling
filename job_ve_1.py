@@ -70,6 +70,8 @@ if __name__ == '__main__':
             spec = deepcopy(s)
             spec.linguistic_spec.corpus_name = corpus.name
             jobs.append(Job_VE_1(spec))
+        # Also add in the unmodified corpus, just to check
+        jobs.append(Job_VE_1(s))
 
     job_count = 0
     for category_letter in ALPHABET.lower():
