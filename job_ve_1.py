@@ -48,7 +48,7 @@ class Job_VE_1(VocabEvolutionCategoryVerificationJob):
     def __init__(self, spec: VocabEvolutionCategoryVerificationJobSpec):
         super().__init__(
             script_number="ve1",
-            script_name="vw_1_modelling.py",
+            script_name="ve_1_modelling.py",
             spec=spec)
 
     @property
