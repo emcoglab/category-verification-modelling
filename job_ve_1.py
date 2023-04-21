@@ -64,8 +64,10 @@ if __name__ == '__main__':
 
     jobs = []
     s: VocabEvolutionCategoryVerificationJobSpec
-    for s in VocabEvolutionCategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
-                                                            "job_specifications/2023-01-12 Paper output.yaml")):
+    for s in VocabEvolutionCategoryVerificationJobSpec.load_multiple(
+            Path(Path(__file__).parent, "job_specifications/2023-01-12 Paper output.yaml")
+            # Only run the first job from this spec sheet - that's the main one, no the no-prop one
+            )[:1]:
         for _, corpus in FILTERED_CORPORA.items():
             spec = deepcopy(s)
             spec.linguistic_spec.corpus_name = corpus.name
@@ -75,18 +77,16 @@ if __name__ == '__main__':
 
     job_count = 0
     for category_letter in ALPHABET.lower():
-        for no_propagation in [True, False]:
-            for validation_run in [True, False]:
-                for job in jobs:
-                    extra_arguments = [f"--category_starts_with {category_letter}"]
-                    if no_propagation: extra_arguments.append("--no_propagation")
-                    if validation_run: extra_arguments.append("--validation_run")
-                    if validation_run and category_letter == "c":
-                        for object_letter in ALPHABET.lower():
-                            job.submit(extra_arguments=extra_arguments + [f"--object_starts_with {object_letter}"])
-                            job_count += 1
-                    else:
-                        job.submit(extra_arguments=extra_arguments)
+        for validation_run in [True, False]:
+            for job in jobs:
+                extra_arguments = [f"--category_starts_with {category_letter}"]
+                if validation_run: extra_arguments.append("--validation_run")
+                if validation_run and category_letter == "c":
+                    for object_letter in ALPHABET.lower():
+                        job.submit(extra_arguments=extra_arguments + [f"--object_starts_with {object_letter}"])
                         job_count += 1
+                else:
+                    job.submit(extra_arguments=extra_arguments)
+                    job_count += 1
 
     print(f"Submitted {job_count} jobs.")
