@@ -508,9 +508,7 @@ class LinguisticPropagationJobSpec(PropagationJobSpec):
 
     def to_component(self, component_class) -> LinguisticComponent:
         corpus = get_corpus_from_name(self.corpus_name)
-        freq_dist = FreqDist.load(corpus.freq_dist_path)
-        distributional_model: LinguisticDistributionalModel = get_model_from_params(
-            corpus, freq_dist, self.model_name, self.model_radius)
+        distributional_model: LinguisticDistributionalModel = get_model_from_params(corpus, self.model_name, self.model_radius)
         return component_class(
             propagator=LinguisticPropagator(
                 distance_type=self.distance_type,
