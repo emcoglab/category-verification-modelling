@@ -120,6 +120,10 @@ class JobSpec(ABC):
                 for d in list(yaml.load_all(file, yaml.SafeLoader))[0]
             ]
 
+    @classmethod
+    def load_first(cls, filename: Path):
+        return cls.load_multiple(filename)[0]
+
     def csv_comments(self) -> List[str]:
         """List of commented"""
         return [

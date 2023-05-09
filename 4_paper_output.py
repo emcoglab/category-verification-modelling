@@ -369,8 +369,8 @@ def get_items_df(items_matching_participant_dataset, validation_run):
             items_df.drop(columns=[ColNames.ResponseAccuracyMean,
                                    ColNames.ResponseAccuracySD,
                                    ColNames.ParticipantCount,
-                                   ColNames.ResponseRTMean,
-                                   ColNames.ResponseRTSD,
+                                   ColNames.ResponseRTMean_ms,
+                                   ColNames.ResponseRTSD_ms,
                                    ],
                           inplace=True)
         else:
