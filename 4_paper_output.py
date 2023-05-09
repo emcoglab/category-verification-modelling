@@ -145,17 +145,17 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         "both": [
             Filter.new_category_taxonomic_level_filter(allowed_levels=["superordinate", "basic"]),
             trial_type_filter,
-            repeated_items_filter
+            repeated_items_filter,
         ],
         "superordinate": [
             Filter.new_category_taxonomic_level_filter(allowed_levels=["superordinate"]),
             trial_type_filter,
-            repeated_items_filter
+            repeated_items_filter,
         ],
         "basic": [
             Filter.new_category_taxonomic_level_filter(allowed_levels=["basic"]),
             trial_type_filter,
-            repeated_items_filter
+            repeated_items_filter,
         ],
     }
 
@@ -345,7 +345,6 @@ def get_peak_activation(row, *, allow_missing_objects: bool, spec: CategoryVerif
         return nan
     else:
         return max(ac for ac in [peak_activation_linguistic, peak_activation_sensorimotor] if not isnan(ac))
-
 
 
 def get_items_df(items_matching_participant_dataset, validation_run):
