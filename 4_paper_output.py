@@ -281,7 +281,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
 
     if participant_datasets is not None:
         agreement_path: Path = Path(save_dir, f"{filename_prefix} agreement.csv")
-        participant_agreement(validation_run, participant_datasets, agreement_path)
+        participant_agreement(validation_run, participant_datasets, agreement_path, filter_responses_faster_than_ms=200)
 
 
 def plot_activation_traces(model_data: Dict[CategoryObjectPair, DataFrame], spec: CategoryVerificationJobSpec, save_to_dir: Path) -> None:
@@ -426,7 +426,7 @@ def save_item_exclusions(items_df: DataFrame, filters: List[Filter], save_path: 
         temp_df.to_csv(filtered_items_file, index=False)
 
 
-def participant_agreement(validation_run: bool, participant_datasets: ParticipantDataset, agreement_path: Path):
+def participant_agreement(validation_run: bool, participant_datasets: ParticipantDataset, agreement_path: Path, filter_responses_faster_than_ms: Optional[float] = None):
 
     # Haven't done these yet!
     if not validation_run or  participant_datasets != ParticipantDataset.balanced:
@@ -435,6 +435,9 @@ def participant_agreement(validation_run: bool, participant_datasets: Participan
 
     item_data = CategoryVerificationItemDataValidationBalanced()
     participant_data = CategoryVerificationParticipantBalancedValidation().data
+
+    if filter_responses_faster_than_ms is not None:
+        participant_data = participant_data[participant_data[ColNames.RT_ms] >= filter_responses_faster_than_ms]
 
     agreements = []
     for list_i, list_data in item_data.item_data_by_list.items():
@@ -553,9 +556,10 @@ def plot_roc(model_hit_rates, model_fa_rates,
                 participant_aucs.append(trapz(py, px))
 
         ppt_title_clause = f"; " \
-                           f"ppt range:" \
-                           f" [{min(participant_aucs):.2f}," \
-                           f" {max(participant_aucs):.2f}]"
+                           f"ppt min/mean/max:" \
+                           f" [{min(participant_aucs):.3f}," \
+                           f" {mean(array(participant_aucs)):.3f}," \
+                           f" {max(participant_aucs):.3f}]"
     else:
         ppt_title_clause = ""
 
@@ -565,7 +569,7 @@ def plot_roc(model_hit_rates, model_fa_rates,
     ax.set_title(f"ROC curve"
                  f" {filename_suffix}\n"
                  f"(AUC model:"
-                 f" {auc:.2}"
+                 f" {auc:.3f}"
                  f"{ppt_title_clause})"
                  )
     ax.set_aspect('equal')
