@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
 from matplotlib import pyplot
-from numpy import trapz, isnan, nan
+from numpy import trapz, isnan, nan, mean, array
 from numpy.random import seed
 from pandas import DataFrame, Series, isna
 from seaborn import jointplot, set_theme
@@ -156,7 +156,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
             Filter.new_category_taxonomic_level_filter(allowed_levels=["basic"]),
             trial_type_filter,
             repeated_items_filter
-        ]
+        ],
     }
 
     # When validating, we can also break down by category domains
@@ -221,9 +221,9 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         participant_plot_datasets = []
         if validation_run:
             if participant_datasets in {ParticipantDataset.validation, ParticipantDataset.validation_plus_balanced}:
-                participant_dataset = CategoryVerificationParticipantBlockedValidation()
+                participant_data = CategoryVerificationParticipantBlockedValidation()
                 # TODO: don't just check it appears to work, verify this line is doing the right thing
-                participant_summary_df = participant_dataset.participant_summary_dataframe(
+                participant_summary_df = participant_data.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemDataBlockedValidation.list_category_object_pairs_from_dataframe(
                         filtered_df))
                 participant_plot_datasets.append(
@@ -232,8 +232,8 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                                         dataset_name="validation", colour="forestgreen", symbol="+")
                 )
             if participant_datasets in {ParticipantDataset.balanced, ParticipantDataset.validation_plus_balanced}:
-                participant_dataset = CategoryVerificationParticipantBalancedValidation()
-                participant_summary_df = participant_dataset.participant_summary_dataframe(
+                participant_data = CategoryVerificationParticipantBalancedValidation()
+                participant_summary_df = participant_data.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemDataBlockedValidation.list_category_object_pairs_from_dataframe(
                         filtered_df))
                 participant_plot_datasets.append(
@@ -244,8 +244,8 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
 
         else:
             if participant_datasets in {ParticipantDataset.original, ParticipantDataset.original_plus_replication}:
-                participant_dataset = CategoryVerificationParticipantOriginal()
-                participant_summary_df = participant_dataset.participant_summary_dataframe(
+                participant_data = CategoryVerificationParticipantOriginal()
+                participant_summary_df = participant_data.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemDataOriginal.list_category_object_pairs_from_dataframe(
                         filtered_df))
                 participant_plot_datasets.append(
@@ -254,8 +254,8 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                                         dataset_name="original", colour="blueviolet", symbol="+")
                 )
             if participant_datasets in {ParticipantDataset.replication, ParticipantDataset.original_plus_replication}:
-                participant_dataset = CategoryVerificationParticipantReplication()
-                participant_summary_df = participant_dataset.participant_summary_dataframe(
+                participant_data = CategoryVerificationParticipantReplication()
+                participant_summary_df = participant_data.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemDataOriginal.list_category_object_pairs_from_dataframe(
                         filtered_df))
                 participant_plot_datasets.append(
