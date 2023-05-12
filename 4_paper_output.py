@@ -215,6 +215,13 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
             model_false_alarm_rates.append(fa_rate)
         filename_suffix = filter_set_name
 
+        dataset_colours: Dict[ParticipantDataset, str] = {
+            ParticipantDataset.original: "blueviolet",
+            ParticipantDataset.replication: "mediumvioletred",
+            ParticipantDataset.validation: "forestgreen",
+            ParticipantDataset.balanced: "lightseagreen",
+        }
+
         # Participant hitrates
         participant_plot_datasets = []
         if validation_run:
@@ -226,7 +233,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="validation", colour="forestgreen", symbol="+")
+                                        dataset_name="validation", colour=dataset_colours[ParticipantDataset.validation], symbol="+")
                 )
             if participant_datasets in {ParticipantDataset.balanced, ParticipantDataset.validation_plus_balanced}:
                 participant_data = CategoryVerificationParticipantBalancedValidation()
@@ -236,7 +243,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="balanced", colour="lightseagreen", symbol="x")
+                                        dataset_name="balanced", colour=dataset_colours[ParticipantDataset.balanced], symbol="x")
                 )
 
         else:
@@ -248,7 +255,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="original", colour="blueviolet", symbol="+")
+                                        dataset_name="original", colour=dataset_colours[ParticipantDataset.original], symbol="+")
                 )
             if participant_datasets in {ParticipantDataset.replication, ParticipantDataset.original_plus_replication}:
                 participant_data = CategoryVerificationParticipantReplication()
@@ -258,7 +265,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                 participant_plot_datasets.append(
                     ParticipantPlotData(hit_rates=participant_summary_df[ColNames.HitRate],
                                         fa_rates=participant_summary_df[ColNames.FalseAlarmRate],
-                                        dataset_name="replication", colour="mediumvioletred", symbol="x")
+                                        dataset_name="replication", colour=dataset_colours[ParticipantDataset.replication], symbol="x")
                 )
 
         plot_roc(model_hit_rates, model_false_alarm_rates,
@@ -268,10 +275,23 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
                  participant_area_colour="indigo",
                  )
 
-        plot_peak_activation_vs_affirmative_proportion(
-            filtered_df,
-            filename_prefix, filename_suffix, save_dir,
-        )
+        scatter_markers: Dict[ParticipantDataset, str] = {
+            ParticipantDataset.original: "3",
+            ParticipantDataset.replication: "4",
+            ParticipantDataset.validation: "2",
+            ParticipantDataset.balanced: "2",
+        }
+        # Only suitable for single participant datasets
+        # (ppt values are included in the item set)
+        if participant_datasets is not None and participant_datasets in {ParticipantDataset.original,
+                                                                         ParticipantDataset.replication,
+                                                                         ParticipantDataset.validation,
+                                                                         ParticipantDataset.balanced}:
+            plot_peak_activation_vs_affirmative_proportion(
+                df=filtered_df,
+                colour=dataset_colours[participant_datasets],
+                marker=scatter_markers[participant_datasets],
+                filename_prefix=filename_prefix, filename_suffix=filename_suffix, save_dir=save_dir)
 
         with Path(save_dir, f"{filename_prefix} data {filename_suffix}.csv") as f:
             filtered_df.to_csv(f, index=False)
@@ -464,19 +484,23 @@ def __compute_kappa(trials_in_list: DataFrame) -> float:
     return κ
 
 
-def plot_peak_activation_vs_affirmative_proportion(df: DataFrame, filename_prefix: str, filename_suffix: str, save_dir: Path) -> None:
+def plot_peak_activation_vs_affirmative_proportion(df: DataFrame, colour: str, marker: str, filename_prefix: str, filename_suffix: str, save_dir: Path) -> None:
     set_theme(style="ticks", rc={
         "axes.spines.right": False,
         "axes.spines.top":   False,
     })
 
-    g = jointplot(data=df, x=ColNames.ResponseAffirmativeProportion, y=MODEL_PEAK_ACTIVATION,
-                  kind="reg", truncate=False,
-                  marginal_kws={"kde": False})
+    grid = jointplot(data=df, x=ColNames.ResponseAffirmativeProportion, y=MODEL_PEAK_ACTIVATION,
+                     kind="reg",
+                     truncate=False,
+                     xlim=(-.05, 1.05), ylim=(-.05, 1.05),
+                     color=colour,
+                     joint_kws={'ci': None, "marker": marker},
+                     marginal_kws={"kde": True})
 
-    g.fig.savefig(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png"), dpi=1200, bbox_inches='tight')
-    g.fig.savefig(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.svg"), dpi=1200, bbox_inches='tight')
-    pyplot.close(g.fig)
+    grid.fig.savefig(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.png"), dpi=1200, bbox_inches='tight')
+    grid.fig.savefig(Path(save_dir, f"{filename_prefix} model peak vs affirmative prop {filename_suffix}.svg"), dpi=1200, bbox_inches='tight')
+    pyplot.close(grid.fig)
 
 
 def performance_for_one_threshold_simplified(
@@ -523,11 +547,9 @@ def plot_roc(model_hit_rates, model_fa_rates,
     auc = trapz(list(reversed(model_hit_rates)), list(reversed(model_fa_rates)))
 
     # Identity line
-    identity_plot = pyplot.plot([0, 1], [0, 1], "r--",
-                                label="Random classifier")
+    pyplot.plot([0, 1], [0, 1], "r--", label="Random classifier")
     # Model
-    model_plot = pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour,
-                             label="Model")
+    pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour, label="Model")
 
     if participant_plot_datasets:
         participant_aucs = []
