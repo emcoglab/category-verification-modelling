@@ -88,8 +88,6 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         (CUP - paper cup), the items are excluded from further analysis.
     """
 
-    logger.info("")
-
     if participant_datasets is not None:
         assert participant_datasets == items_matching_participant_dataset
 
@@ -222,7 +220,6 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         if validation_run:
             if participant_datasets in {ParticipantDataset.validation, ParticipantDataset.validation_plus_balanced}:
                 participant_data = CategoryVerificationParticipantBlockedValidation()
-                # TODO: don't just check it appears to work, verify this line is doing the right thing
                 participant_summary_df = participant_data.participant_summary_dataframe(
                     use_item_subset=CategoryVerificationItemDataBlockedValidation.list_category_object_pairs_from_dataframe(
                         filtered_df))
@@ -452,7 +449,6 @@ def participant_agreement(validation_run: bool, participant_datasets: Participan
         DataFrame(agreements).to_csv(f, index=False)
 
 
-# todo: extract duplicate
 def __compute_kappa(trials_in_list: DataFrame) -> float:
     trials_in_list = trials_in_list.copy()
     trials_in_list["yes"] = trials_in_list[ColNames.Response]
@@ -533,7 +529,6 @@ def plot_roc(model_hit_rates, model_fa_rates,
     model_plot = pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour,
                              label="Model")
 
-    legend_items = [identity_plot, model_plot]
     if participant_plot_datasets:
         participant_aucs = []
         individual_area_colour: RGBA = named_colour(
