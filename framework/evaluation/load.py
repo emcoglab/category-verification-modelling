@@ -16,6 +16,10 @@ from framework.evaluation.datasets import ParticipantDataset
 _logger = getLogger(__file__)
 
 
+class NoOutputFilesError(FileNotFoundError):
+    pass
+
+
 def load_model_output_from_dir(activation_traces_dir: Path, validation: bool, for_participant_dataset: ParticipantDataset, with_filters: List[Filter] = None) -> Dict[CategoryObjectPair, DataFrame]:
     """
     Returns a CategoryObjectPair-keyed dictionary of activation traces.
@@ -51,6 +55,6 @@ def load_model_output_from_dir(activation_traces_dir: Path, validation: bool, fo
                                                                                     dtype={CLOCK: int})
 
     if len(all_model_data) == 0:
-        raise FileNotFoundError(f"No model data in {activation_traces_dir.as_posix()}")
+        raise NoOutputFilesError(f"No model data in {activation_traces_dir.as_posix()}")
 
     return all_model_data

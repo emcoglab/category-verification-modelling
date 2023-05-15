@@ -788,7 +788,17 @@ class CategoryVerificationJobSpec(InteractiveCombinedJobSpec):
 
 @dataclass
 class VocabEvolutionCategoryVerificationJobSpec(CategoryVerificationJobSpec):
-    pass
+
+    def replace_corpus(self, corpus_name: str):
+        self.linguistic_spec.corpus_name = corpus_name
+
+        # The actual number of words here will sometimes be less than the
+        # requested number of words. Because the number of words is used in the
+        # file name we have to replace it with the actual number of words
+        corpus = get_corpus_from_name(self.linguistic_spec.corpus_name)
+        freq_dist = FreqDist.load(corpus.freq_dist_path)
+        if len(freq_dist) < self.linguistic_spec.n_words:
+            self.linguistic_spec.n_words = len(freq_dist)
 
 
 # endregion
@@ -916,13 +926,5 @@ class VocabEvolutionCategoryVerificationJob(CategoryVerificationJob, ABC):
     def __init__(self, *args, **kwargs):
         self.spec: VocabEvolutionCategoryVerificationJobSpec
         super().__init__(*args, **kwargs)
-
-        # The actual number of words here will sometimes be less than the
-        # requested number of words. Because the number of words is used in the
-        # file name we have to replace it with the actual number of words
-        corpus = get_corpus_from_name(self.spec.linguistic_spec.corpus_name)
-        freq_dist = FreqDist.load(corpus.freq_dist_path)
-        if len(freq_dist) < self.spec.linguistic_spec.n_words:
-            self.spec.linguistic_spec.n_words = len(freq_dist)
 
 # endregion

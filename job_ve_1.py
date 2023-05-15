@@ -62,7 +62,7 @@ if __name__ == '__main__':
             )[:1]:
         for _, corpus in FILTERED_CORPORA.items():
             spec = deepcopy(s)
-            spec.linguistic_spec.corpus_name = corpus.name
+            spec.replace_corpus(corpus.name)
             jobs.append(Job_VE_1(spec))
         # Also add in the unmodified corpus, just to check
         jobs.append(Job_VE_1(s))
