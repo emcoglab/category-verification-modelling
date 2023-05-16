@@ -131,6 +131,7 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
 
 def main(job_spec: VocabEvolutionCategoryVerificationJobSpec, validation_run: bool,
          filter_category_starts_with: Optional[str], filter_object_starts_with: Optional[str],
+         cue_activation_component: Component,
          no_propagation: bool = False):
 
     # Validate args
@@ -257,13 +258,20 @@ def main(job_spec: VocabEvolutionCategoryVerificationJobSpec, validation_run: bo
         while model.sensorimotor_component.propagator.firing_guards[0] == just_no_guard:
             model.sensorimotor_component.propagator.firing_guards.popleft()
 
-        # Activate the initial category label in the linguistic component only
+        # Activate the initial category label
         try:
-            model.linguistic_component.propagator.activate_items_with_labels(
-                labels=category_label_linguistic_multiword_parts,
-                activation=FULL_ACTIVATION / len(category_label_linguistic_multiword_parts))
+            if cue_activation_component == Component.linguistic:
+                model.linguistic_component.propagator.activate_items_with_labels(
+                    labels=category_label_linguistic_multiword_parts,
+                    activation=FULL_ACTIVATION / len(category_label_linguistic_multiword_parts))
+            elif cue_activation_component == Component.sensorimotor:
+                model.sensorimotor_component.propagator.activate_item_with_label(
+                    label=category_label_sensorimotor,
+                    activation=FULL_ACTIVATION)
+            else:
+                raise NotImplementedError()
         except ItemNotFoundError:
-            logger.error(f"Missing linguistic item for category: {category_label} ({category_label_linguistic})")
+            logger.error(f"Missing {cue_activation_component.name} item for category: {category_label} ({category_label_linguistic if cue_activation_component == Component.linguistic else category_label_sensorimotor})")
             # Missing item, can make no sensible prediction
             continue
 
@@ -455,6 +463,7 @@ if __name__ == '__main__':
         filter_category_starts_with=args.category_starts_with,
         filter_object_starts_with=args.object_starts_with,
         no_propagation=args.no_propagation,
+        cue_activation_component=Component.sensorimotor,
     )
 
     logger.info("Done!")
