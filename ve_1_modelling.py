@@ -77,10 +77,16 @@ def _get_activation_data(model, category_multiword_parts, category_label_sensori
     """
     Gets the activation data relevant to the current condition from the model.
     """
-    # We already know that linguistic category terms exist, as we've activated them (or failed to) before
+
+    def _linguistic_activation_or_nan(x):
+        try:
+            return model.linguistic_component.propagator.activation_of_item_with_label(x)
+        except ItemNotFoundError:
+            return nan
+
     category_activation_linguistic_dict = {
         CATEGORY_ACTIVATION_LINGUISTIC_f.format(part)
-        : model.linguistic_component.propagator.activation_of_item_with_label(part)
+        : _linguistic_activation_or_nan(part)
         for part in category_multiword_parts
     }
     # For the sensorimotor category, we need to check that it exists, and skip it if it doesn't
