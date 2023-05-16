@@ -68,8 +68,8 @@ if __name__ == '__main__':
         jobs.append(Job_VE_1(s))
 
     job_count = 0
-    for category_letter in ALPHABET.lower():
-        for validation_run in [True, False]:
+    for validation_run in [True, False]:
+        for category_letter in ALPHABET.lower():
             for job in jobs:
                 extra_arguments = [f"--category_starts_with {category_letter}"]
                 if validation_run: extra_arguments.append("--validation_run")
