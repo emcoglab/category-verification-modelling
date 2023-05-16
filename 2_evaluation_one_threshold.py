@@ -155,6 +155,8 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 new_filter_sets[f"{category_domain} {name}"] = filter_set + [Filter.new_category_domain_filter([category_domain])]
         filter_sets = new_filter_sets
 
+    activation_traces_dir = Path(model_output_dir, "activation traces")
+
     # Add model peak activations
     model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(activation_traces_dir, validation=validation_run, for_participant_dataset=participant_datasets)
 
@@ -241,8 +243,8 @@ def main(spec: CategoryVerificationJobSpec, spec_filename: str, exclude_repeated
                 filtered_df.drop(columns=[ColNames.ResponseAccuracyMean,
                                           ColNames.ResponseAccuracySD,
                                           ColNames.ParticipantCount,
-                                          ColNames.ResponseRTMean,
-                                          ColNames.ResponseRTSD,
+                                          ColNames.ResponseRTMean_ms,
+                                          ColNames.ResponseRTSD_ms,
                                           ],
                                  inplace=True)
             else:

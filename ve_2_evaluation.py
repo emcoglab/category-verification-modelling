@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+from copy import deepcopy
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
@@ -32,7 +33,17 @@ from pandas import DataFrame, Series, isna
 from seaborn import jointplot, set_theme
 from statsmodels.stats.inter_rater import fleiss_kappa
 
-from framework.cli.job import CategoryVerificationJobSpec
+from framework.evolution.corpora import FILTERED_CORPORA
+
+_config_file_location = Path(Path(__file__).parent, "framework/evolution/config_override.yaml")
+from framework.cognitive_model.preferences.config import Config as ModelConfig
+ModelConfig(use_config_overrides_from_file=_config_file_location.as_posix())
+from framework.cognitive_model.ldm.preferences.config import Config as LDMConfig
+LDMConfig(use_config_overrides_from_file=_config_file_location.as_posix())
+from framework.cognitive_model.sensorimotor_norms.config.config import Config as SMConfig
+SMConfig(use_config_overrides_from_file=_config_file_location.as_posix())
+
+from framework.cli.job import VocabEvolutionCategoryVerificationJobSpec
 from framework.cognitive_model.basic_types import ActivationValue
 from framework.cognitive_model.components import FULL_ACTIVATION
 from framework.cognitive_model.ldm.corpus.tokenising import modified_word_tokenize
@@ -50,12 +61,11 @@ from framework.data.substitution import substitutions_for
 from framework.evaluation.column_names import OBJECT_ACTIVATION_SENSORIMOTOR_f, OBJECT_ACTIVATION_LINGUISTIC_f
 from framework.evaluation.datasets import ParticipantDataset
 from framework.evaluation.figures import opacity_for_overlap, named_colour, RGBA
-from framework.evaluation.load import load_model_output_from_dir
-
+from framework.evaluation.load import load_model_output_from_dir, NoOutputFilesError
 
 # Paths
-ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
-OUTPUT_DIR = Path("/Users/caiwingfield/Resilio Sync/Lancaster/ Current/CV output")
+ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification vocab evolution")
+OUTPUT_DIR = Path("/Users/caiwingfield/Resilio Sync/Lancaster/ Current/CV ve output")
 
 # Shared
 _n_threshold_steps = 10
@@ -78,7 +88,7 @@ class ParticipantPlotData:
     symbol: str
 
 
-def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
+def main(spec: VocabEvolutionCategoryVerificationJobSpec, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, validation_run: bool,
          participant_datasets: Optional[ParticipantDataset], items_matching_participant_dataset: ParticipantDataset,
          no_propagation: bool, overwrite: bool):
@@ -92,8 +102,12 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         assert participant_datasets == items_matching_participant_dataset
 
     # Determine directory paths with optional tests for early exit
-    model_output_dir = Path(ROOT_INPUT_DIR, spec.output_location_relative())
-    save_dir = Path(OUTPUT_DIR, spec.output_location_relative())
+    model_output_dir = Path(ROOT_INPUT_DIR,
+                            f"{spec.linguistic_spec.corpus_name}",
+                            spec.output_location_relative())
+    save_dir = Path(OUTPUT_DIR,
+                    f"{spec.linguistic_spec.corpus_name}",
+                    spec.output_location_relative())
     if no_propagation:
         model_output_dir = Path(model_output_dir.parent, model_output_dir.name + "_no_propagation")
         save_dir = Path(save_dir.parent, save_dir.name + "_no_propagation")
@@ -169,7 +183,11 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         filter_sets = new_filter_sets
 
     # Add model peak activations
-    model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(activation_traces_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset)
+    try:
+        model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(activation_traces_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset)
+    except NoOutputFilesError:
+        # Sometimes there will be no files for severely cut-down models
+        model_data: Dict[CategoryObjectPair, DataFrame] = dict()
 
     activation_plots_dir = Path(save_dir, "activation plots")
     activation_plots_dir.mkdir(parents=False, exist_ok=True)
@@ -301,7 +319,7 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         participant_agreement(validation_run, participant_datasets, agreement_path, filter_responses_faster_than_ms=200)
 
 
-def plot_activation_traces(model_data: Dict[CategoryObjectPair, DataFrame], spec: CategoryVerificationJobSpec, save_to_dir: Path) -> None:
+def plot_activation_traces(model_data: Dict[CategoryObjectPair, DataFrame], spec: VocabEvolutionCategoryVerificationJobSpec, save_to_dir: Path) -> None:
     for cop, activation_data in model_data.items():
         object_label_linguistic, object_label_sensorimotor = substitutions_for(cop.object_label)
         object_label_linguistic_multiword_parts: List[str] = modified_word_tokenize(object_label_linguistic)
@@ -327,7 +345,7 @@ def plot_activation_traces(model_data: Dict[CategoryObjectPair, DataFrame], spec
         pyplot.close(fig)
 
 
-def get_peak_activation(row, *, allow_missing_objects: bool, spec: CategoryVerificationJobSpec, model_data: Dict[CategoryObjectPair, DataFrame]) -> float:
+def get_peak_activation(row, *, allow_missing_objects: bool, spec: VocabEvolutionCategoryVerificationJobSpec, model_data: Dict[CategoryObjectPair, DataFrame]) -> float:
     cop = CategoryObjectPair(category_label=row[ColNames.CategoryLabel], object_label=row[ColNames.ImageObject])
     try:
         model_activations_df: DataFrame = model_data[cop]
@@ -528,8 +546,15 @@ def performance_for_one_threshold_simplified(
     model_hit_count = len(all_data[(all_data[ColNames.ShouldBeVerified] == True) & (all_data[MODEL_GUESS] == True)])
     model_fa_count = len(all_data[(all_data[ColNames.ShouldBeVerified] == False) & (all_data[MODEL_GUESS] == True)])
 
-    model_hit_rate = model_hit_count / n_trials_signal
-    model_false_alarm_rate = model_fa_count / n_trials_noise
+    # Very cut-down models may have no items available to them, so hr/far don't make sense
+    try:
+        model_hit_rate = model_hit_count / n_trials_signal
+    except ZeroDivisionError:
+        model_hit_rate = nan
+    try:
+        model_false_alarm_rate = model_fa_count / n_trials_noise
+    except ZeroDivisionError:
+        model_false_alarm_rate = nan
 
     return model_hit_rate, model_false_alarm_rate
 
@@ -625,16 +650,17 @@ if __name__ == '__main__':
         ArgSet(validation_run=True,  participant_datasets=ParticipantDataset.balanced, items_matching_participant_dataset=ParticipantDataset.balanced),
     ]
 
-    loaded_specs = CategoryVerificationJobSpec.load_multiple(Path(Path(__file__).parent,
-                                                                  "job_specifications",
-                                                                  "2023-01-12 Paper output.yaml"))
-    cca_spec: CategoryVerificationJobSpec = loaded_specs[0]
-    no_cca_spec: CategoryVerificationJobSpec = loaded_specs[1]
+    cca_spec: VocabEvolutionCategoryVerificationJobSpec = VocabEvolutionCategoryVerificationJobSpec.load_first(
+        Path(Path(__file__).parent,
+             "job_specifications",
+             "2023-01-12 Paper output.yaml"))
 
     for arg_set in arg_sets:
+        for _, corpus in FILTERED_CORPORA.items():
+            spec = deepcopy(cca_spec)
+            spec.replace_corpus(corpus.name)
+            main(spec=spec, no_propagation=False, **asdict(arg_set))
+        # For unfiltered corpus comparison
         main(spec=cca_spec, no_propagation=False, **asdict(arg_set))
-        main(spec=cca_spec, no_propagation=True, **asdict(arg_set))
-        main(spec=no_cca_spec, no_propagation=False, **asdict(arg_set))
-        main(spec=no_cca_spec, no_propagation=True, **asdict(arg_set))
 
     logger.info("Done!")
