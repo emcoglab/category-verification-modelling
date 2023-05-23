@@ -55,7 +55,7 @@ from framework.evaluation.load import load_model_output_from_dir
 
 # Paths
 ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification")
-OUTPUT_DIR = Path("/Users/caiwingfield/Resilio Sync/Lancaster/ Current/CV output")
+OUTPUT_DIR = Path("/Users/caiwingfield/Box Sync/LANGBOOT Project/Manuscripts/DRAFT Category verification modelling/CV output")
 
 # Shared
 _n_threshold_steps = 10

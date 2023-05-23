@@ -64,8 +64,8 @@ from framework.evaluation.figures import opacity_for_overlap, named_colour, RGBA
 from framework.evaluation.load import load_model_output_from_dir, NoOutputFilesError
 
 # Paths
-ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification vocab evolution")
-OUTPUT_DIR = Path("/Users/caiwingfield/Resilio Sync/Lancaster/ Current/CV ve output")
+ROOT_INPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification vocab evolution (sensorimotor activation)")
+OUTPUT_DIR = Path("/Volumes/Big Data/spreading activation model/Model output/Category verification vocab evolution (sensorimotor activation)/ANALYSIS")
 
 # Shared
 _n_threshold_steps = 10
