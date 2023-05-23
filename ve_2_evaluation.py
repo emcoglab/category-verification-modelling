@@ -628,7 +628,7 @@ class ArgSet:
     items_matching_participant_dataset: ParticipantDataset
 
     exclude_repeated_items: bool = True
-    restrict_to_answerable_items: bool = True
+    restrict_to_answerable_items: bool = False  # Required for VE because of severely constrained linguistic component
 
     overwrite: bool = True
 
