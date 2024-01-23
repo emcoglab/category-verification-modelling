@@ -552,7 +552,7 @@ def plot_roc(model_hit_rates, model_fa_rates,
     pyplot.plot(model_fa_rates, model_hit_rates, "-", color=model_colour, label="Model")
 
     if participant_plot_datasets:
-        participant_aucs = []
+        participant_aucs_all = []
         individual_area_colour: RGBA = named_colour(
             participant_area_colour,
             with_alpha=opacity_for_overlap(desired_total_opacity=0.4,
@@ -565,23 +565,26 @@ def plot_roc(model_hit_rates, model_fa_rates,
             # Participant mean spline interpolation
             # pyplot.plot(participant_interpolated_x, participant_interpolated_y, "g--")
             # Participant linearly interpolated areas
+            participant_aucs_this_dataset = []
             for participant_fa, participant_hit in zip(participant_plot_data.fa_rates, participant_plot_data.hit_rates):
                 px = [0, participant_fa, 1]
                 py = [0, participant_hit, 1]
                 pyplot.fill_between(px, py, color=individual_area_colour, label='_nolegend_')
-                participant_aucs.append(trapz(py, px))
+                participant_aucs_this_dataset.append(trapz(py, px))
 
             DataFrame.from_dict({
                 "Participant hit rate": participant_plot_data.hit_rates,
                 "Participant false-alarm rate": participant_plot_data.fa_rates,
-                "Participant ROC-AUC": participant_aucs,
+                "Participant ROC-AUC": participant_aucs_this_dataset,
             }).to_csv(Path(save_dir, f"{filename_prefix} ROC data {participant_plot_data.dataset_name} {filename_suffix}.csv"))
+
+            participant_aucs_all.extend(participant_aucs_this_dataset)
 
         ppt_title_clause = f"; " \
                            f"ppt min/mean/max:" \
-                           f" [{min(participant_aucs):.3f}," \
-                           f" {mean(array(participant_aucs)):.3f}," \
-                           f" {max(participant_aucs):.3f}]"
+                           f" [{min(participant_aucs_all):.3f}," \
+                           f" {mean(array(participant_aucs_all)):.3f}," \
+                           f" {max(participant_aucs_all):.3f}]"
     else:
         ppt_title_clause = ""
 
