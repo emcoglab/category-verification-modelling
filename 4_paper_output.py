@@ -572,8 +572,9 @@ def plot_roc(model_hit_rates, model_fa_rates,
                 participant_aucs.append(trapz(py, px))
 
             DataFrame.from_dict({
-                "Hit rate": participant_plot_data.hit_rates,
-                "False-alarm rate": participant_plot_data.fa_rates,
+                "Participant hit rate": participant_plot_data.hit_rates,
+                "Participant false-alarm rate": participant_plot_data.fa_rates,
+                "Participant ROC-AUC": participant_aucs,
             }).to_csv(Path(save_dir, f"{filename_prefix} ROC data {participant_plot_data.dataset_name} {filename_suffix}.csv"))
 
         ppt_title_clause = f"; " \
