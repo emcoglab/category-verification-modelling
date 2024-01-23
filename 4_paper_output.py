@@ -543,6 +543,13 @@ def plot_roc(model_hit_rates, model_fa_rates,
 
     fig, ax = pyplot.subplots()
 
+    # Save data underlying model ROC-AUC
+    DataFrame.from_dict({
+        "Model decision threshold": THRESHOLDS,
+        "Model hit rate": model_hit_rates,
+        "Model false-alarm rate": model_fa_rates,
+    }).to_csv(Path(save_dir, f"{filename_prefix} ROC data model {filename_suffix}.csv"), index=False)
+
     # AUC
     auc = trapz(list(reversed(model_hit_rates)), list(reversed(model_fa_rates)))
 
@@ -572,11 +579,12 @@ def plot_roc(model_hit_rates, model_fa_rates,
                 pyplot.fill_between(px, py, color=individual_area_colour, label='_nolegend_')
                 participant_aucs_this_dataset.append(trapz(py, px))
 
+            # Save data underlying participant ROC-AUCs
             DataFrame.from_dict({
                 "Participant hit rate": participant_plot_data.hit_rates,
                 "Participant false-alarm rate": participant_plot_data.fa_rates,
                 "Participant ROC-AUC": participant_aucs_this_dataset,
-            }).to_csv(Path(save_dir, f"{filename_prefix} ROC data {participant_plot_data.dataset_name} {filename_suffix}.csv"))
+            }).to_csv(Path(save_dir, f"{filename_prefix} ROC data {participant_plot_data.dataset_name} {filename_suffix}.csv"), index=False)
 
             participant_aucs_all.extend(participant_aucs_this_dataset)
 
