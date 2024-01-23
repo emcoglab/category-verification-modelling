@@ -571,6 +571,11 @@ def plot_roc(model_hit_rates, model_fa_rates,
                 pyplot.fill_between(px, py, color=individual_area_colour, label='_nolegend_')
                 participant_aucs.append(trapz(py, px))
 
+            DataFrame.from_dict({
+                "Hit rate": participant_plot_data.hit_rates,
+                "False-alarm rate": participant_plot_data.fa_rates,
+            }).to_csv(Path(save_dir, f"{filename_prefix} ROC data {participant_plot_data.dataset_name} {filename_suffix}.csv"))
+
         ppt_title_clause = f"; " \
                            f"ppt min/mean/max:" \
                            f" [{min(participant_aucs):.3f}," \
