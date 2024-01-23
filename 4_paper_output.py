@@ -210,7 +210,10 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
             hit_rate, fa_rate = performance_for_one_threshold_simplified(
                 all_data=filtered_df,
                 decision_threshold=decision_threshold,
-                strict_inequality=True)
+                strict_inequality=True,
+                filter_set_name=filter_set_name,
+                save_dir=save_dir,
+            )
             model_hit_rates.append(hit_rate)
             model_false_alarm_rates.append(fa_rate)
         filename_suffix = filter_set_name
@@ -506,7 +509,10 @@ def plot_peak_activation_vs_affirmative_proportion(df: DataFrame, colour: str, m
 def performance_for_one_threshold_simplified(
         all_data: DataFrame,
         decision_threshold: ActivationValue,
-        strict_inequality: bool) -> Tuple[float, float]:
+        strict_inequality: bool,
+        filter_set_name: str,
+        save_dir: Path,
+) -> Tuple[float, float]:
     """
     Returns hit_rate, false-alarm rate.
     """
@@ -522,6 +528,12 @@ def performance_for_one_threshold_simplified(
         if decision_threshold == FULL_ACTIVATION:
             decision_threshold -= 1e-10
         all_data[MODEL_GUESS] = all_data[MODEL_PEAK_ACTIVATION] >= decision_threshold
+
+    # Save model decision data
+    strict_fragment = "strict" if strict_inequality else "non-strict"
+    save_dir = Path(save_dir, "model decisions")
+    save_dir.mkdir(parents=False, exist_ok=True)
+    all_data.to_csv(Path(save_dir, f"model decisions {filter_set_name} at threshold {decision_threshold} {strict_fragment}-inequality.csv"), index=False)
 
     n_trials_signal = len(all_data[all_data[ColNames.ShouldBeVerified] == True])
     n_trials_noise = len(all_data[all_data[ColNames.ShouldBeVerified] == False])
