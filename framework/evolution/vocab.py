@@ -94,7 +94,7 @@ _vocab_paths: Dict[str, Path] = {
     "Evolutionary": Path(_data_dir, "Evolutionary vocab list N=34138.csv"),
     "Frequency": Path(_data_dir, "Frequency vocab list N=34138.csv"),
 }
-_list_nums = [1, 2, 3, 4, 5, 6, 7]
+_list_nums = [0, 1, 2, 3, 4, 5, 6, 7]
 
 # The canonical list of Vocabs to be used in the experiment
 # base_name -> list_i -> Vocab
