@@ -78,10 +78,20 @@ class ParticipantPlotData:
     symbol: str
 
 
+def nullify_sensorimotor_activation(model_output: DataFrame) -> None:
+    # Ugh, just ignoring all the delicacy with which I set up column names.
+    # Just drive a bulldozer right through it.
+    for col in model_output.columns:
+        if "(sensorimotor)" in col:
+            model_output[col] = 0
+
+
 def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
          restrict_to_answerable_items: bool, validation_run: bool,
          participant_datasets: Optional[ParticipantDataset], items_matching_participant_dataset: ParticipantDataset,
-         no_propagation: bool, overwrite: bool):
+         no_propagation: bool, overwrite: bool,
+         for_reviewer_ignore_sensorimotor: bool = False,
+         ):
     """
     :param: exclude_repeated_items:
         If yes, where a category and item are identical (GRASSHOPPER - grasshopper) or the latter includes the former
@@ -99,9 +109,15 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
         save_dir = Path(save_dir.parent, save_dir.name + "_no_propagation")
     if validation_run:
         model_output_dir = Path(model_output_dir, "validation")
-        save_dir = Path(save_dir, "validation")
+        save_dir = Path(save_dir,
+                        # Quick and dirty hack to separate out evaluation which ignores sensorimotor information,
+                        # to satisfy a reviewer
+                        "validation" if not for_reviewer_ignore_sensorimotor else "validation_ignore_sensorimotor")
     else:
-        save_dir = Path(save_dir, "original")
+        save_dir = Path(save_dir,
+                        # Quick and dirty hack to separate out evaluation which ignores sensorimotor information,
+                        # to satisfy a reviewer
+                        "original" if not for_reviewer_ignore_sensorimotor else "original_ignore_sensorimotor")
     if not model_output_dir.exists():
         logger.warning(f"Model output not found for v{VERSION} in directory {model_output_dir.as_posix()}")
         return
@@ -170,6 +186,10 @@ def main(spec: CategoryVerificationJobSpec, exclude_repeated_items: bool,
 
     # Add model peak activations
     model_data: Dict[CategoryObjectPair, DataFrame] = load_model_output_from_dir(activation_traces_dir, validation=validation_run, for_participant_dataset=items_matching_participant_dataset)
+
+    if for_reviewer_ignore_sensorimotor:
+        for cop in model_data.keys():
+            nullify_sensorimotor_activation(model_data[cop])
 
     activation_plots_dir = Path(save_dir, "activation plots")
     activation_plots_dir.mkdir(parents=False, exist_ok=True)
@@ -665,5 +685,6 @@ if __name__ == '__main__':
         main(spec=cca_spec, no_propagation=True, **asdict(arg_set))
         main(spec=no_cca_spec, no_propagation=False, **asdict(arg_set))
         main(spec=no_cca_spec, no_propagation=True, **asdict(arg_set))
+        main(spec=no_cca_spec, no_propagation=False, for_reviewer_ignore_sensorimotor=True, **asdict(arg_set))  # Linguistic-only model
 
     logger.info("Done!")
